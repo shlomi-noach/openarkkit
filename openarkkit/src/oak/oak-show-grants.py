@@ -63,9 +63,9 @@ def show_grants(conn):
             query = "SHOW GRANTS FOR '%s'@'%s'" % (user, host,)
             grant_cursor = conn.cursor()
             grant_cursor.execute(query)
-            grant = grant_cursor.fetchone()
+            for grant in grant_cursor.fetchall():
+                print grant[0]
             grant_cursor.close()
-            print grant[0]
         except:
             print "-- Cannot %s" % query
     cursor.close()

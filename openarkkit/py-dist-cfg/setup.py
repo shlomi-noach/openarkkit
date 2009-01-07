@@ -18,6 +18,7 @@ setup(
         "scripts/oak-purge-master-logs",
         "scripts/oak-security-audit",
         "scripts/oak-show-charset",
+        "scripts/oak-show-grants",
         "scripts/oak-show-limits",
         "scripts/oak-show-replication-status",
         ]
