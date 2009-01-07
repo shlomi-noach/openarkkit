@@ -47,12 +47,15 @@ def verbose_topic(message):
 def recommend(message):
     verbose(message+". Recommended actions:")
 
+def verbose_passed():
+    verbose("Passed")
+
 def print_error(message):
     print "-- ERROR: %s" % message
 
 def get_in_query(list):
     return "(" + ", ".join([ "'%s'" % item for item in list ]) + ")"
-    
+
 def open_connection():
     if options.defaults_file:
         conn = MySQLdb.connect(read_default_file = options.defaults_file)
@@ -69,21 +72,6 @@ def open_connection():
             unix_socket = options.socket)
     return conn;
 
-def act_final_query(query):        
-    """
-    Either print or execute the given query
-    """
-    if options.print_only:
-        print query
-    else:
-        update_cursor = conn.cursor()
-        try:
-            try:
-                update_cursor.execute(query)
-            except:
-                print_error("error executing: %s" % query)
-        finally:
-            update_cursor.close()
 
 def audit_root_user(conn):
     verbose_topic("Looking for non local 'root' accounts")
@@ -100,7 +88,7 @@ def audit_root_user(conn):
             except:
                 print_error("-- Cannot %s" % query)
     else:
-        verbose("No remote 'root' accouts found")
+        verbose_passed()
     cursor.close()
 
 def audit_anonymous_user(conn):
@@ -118,7 +106,7 @@ def audit_anonymous_user(conn):
             except:
                 print_error("-- Cannot %s" % query)
     else:
-        verbose("No anonymous accounts found")
+        verbose_passed()
     cursor.close()
 
 def audit_any_host(conn):
@@ -136,7 +124,7 @@ def audit_any_host(conn):
             except:
                 print_error("-- Cannot %s" % query)
     else:
-        verbose("No wildcard hosts found")
+        verbose_passed()
     cursor.close()
 
 def audit_empty_passwords_accounts(conn):
@@ -150,13 +138,13 @@ def audit_empty_passwords_accounts(conn):
             try:
                 user, host = row["user"], row["host"]
                 new_password = '<some password>'
-                
+
                 query = "SET PASSWORD FOR '%s'@'%s' = PASSWORD('%s');" % (user, host, new_password)
                 print query
             except:
                 print_error("-- Cannot %s" % query)
     else:
-        verbose("No empty password accounts found")
+        verbose_passed()
     cursor.close()
 
 def audit_identical_passwords_accounts(conn):
@@ -175,7 +163,7 @@ def audit_identical_passwords_accounts(conn):
                 query = "SET PASSWORD FOR %s = PASSWORD('%s');" % (account, new_password)
                 print query
     else:
-        verbose("No empty password accounts found")
+        verbose_passed()
     cursor.close()
 
 
@@ -199,16 +187,16 @@ def audit_all_privileges(conn):
                     query = "GRANT <specific privileges> ON *.* TO '%s'@'%s';" % (user, host,)
                     permissive_privileges.append((user,host,query,))
             grant_cursor.close()
-            
+
         except:
             print "-- Cannot %s" % query
     if permissive_privileges:
         verbose("There are %d non root accounts with all privileges" % len(permissive_privileges))
         for (user,host,query) in permissive_privileges:
-            print query 
+            print query
     else:
-        verbose("No accounts found with all privileges")
-       
+        verbose_passed()
+
     cursor.close()
 
 
@@ -228,8 +216,79 @@ def audit_admin_privileges(conn):
             query = "GRANT <non-admin-privileges> ON *.* TO %s;" % grantee
             print query
     else:
-        verbose("No accounts found with admin privileges")
-       
+        verbose_passed()
+
+    cursor.close()
+
+
+def audit_global_ddl_privileges(conn):
+    verbose_topic("Looking for (non-root) accounts with data definition privileges")
+    cursor = conn.cursor(MySQLdb.cursors.DictCursor)
+    query = "SELECT GRANTEE, GROUP_CONCAT(PRIVILEGE_TYPE) AS privileges FROM information_schema.USER_PRIVILEGES WHERE PRIVILEGE_TYPE IN %s GROUP BY GRANTEE" % get_in_query(privileges_ddl)
+    cursor.execute(query)
+
+    grantees = [row["GRANTEE"] for row in cursor.fetchall()]
+    suspicious_grantees = [grantee for grantee in grantees if not grantee.startswith("'root'")]
+
+    if suspicious_grantees:
+        verbose("There are %d non-root accounts with global data definition privileges." % len(suspicious_grantees))
+        verbose("These accounts can drop or alter tables in all schemata, including the mysql database itself")
+        recommend("data definition privileges are: %s" % ", ".join(privileges_ddl))
+        for grantee in suspicious_grantees:
+            query = "GRANT <non-data-definition-privileges> ON *.* TO %s;" % grantee
+            print query
+        verbose("It is further recommended to only grant privileges on specific databases")
+    else:
+        verbose_passed()
+
+    cursor.close()
+
+
+def audit_db_ddl_privileges(conn):
+    verbose_topic("Looking for (non-root) accounts with schema data definition privileges")
+    cursor = conn.cursor(MySQLdb.cursors.DictCursor)
+    query = "SELECT GRANTEE, GROUP_CONCAT(PRIVILEGE_TYPE) AS privileges, TABLE_SCHEMA FROM information_schema.SCHEMA_PRIVILEGES WHERE PRIVILEGE_TYPE IN %s GROUP BY GRANTEE" % get_in_query(privileges_ddl)
+    cursor.execute(query)
+
+    suspicious_grantees = []
+    for row in cursor.fetchall():
+        grantee, schema = (row["GRANTEE"], row["TABLE_SCHEMA"],)
+        if not grantee.startswith("'root'"):
+            suspicious_grantees.append((grantee, schema,))
+
+    if suspicious_grantees:
+        verbose("There are %d non-root accounts with schema data definition privileges" % len(suspicious_grantees))
+        verbose("These accounts can drop or alter tables in those schemas, or drop the schema itself.")
+        recommend("data definition privileges are: %s" % ", ".join(privileges_ddl))
+        for grantee, schema in suspicious_grantees:
+            query = 'GRANT <non-data-definition-privileges> ON "%s".* TO %s;' % (schema, grantee,)
+            print query
+    else:
+        verbose_passed()
+
+    cursor.close()
+
+
+def audit_global_dml_privileges(conn):
+    verbose_topic("Looking for (non-root) accounts with global data manipulation privileges")
+    cursor = conn.cursor(MySQLdb.cursors.DictCursor)
+    query = "SELECT GRANTEE, GROUP_CONCAT(PRIVILEGE_TYPE) AS privileges FROM information_schema.USER_PRIVILEGES WHERE PRIVILEGE_TYPE IN %s GROUP BY GRANTEE" % get_in_query(privileges_dml)
+    cursor.execute(query)
+
+    grantees = [row["GRANTEE"] for row in cursor.fetchall()]
+    suspicious_grantees = [grantee for grantee in grantees if not grantee.startswith("'root'")]
+
+    if suspicious_grantees:
+        verbose("There are %d non-root accounts with global data manipulation privileges." % len(suspicious_grantees))
+        verbose("These accounts can read and change data in all schemata, including the mysql database itself")
+        recommend("data definition privileges are: %s" % ", ".join(privileges_dml))
+        verbose("Only grant privileges on specific schemata")
+        for grantee in suspicious_grantees:
+            query = "GRANT <the-privileges> ON <specific_schema>.* TO %s;" % grantee
+            print query
+    else:
+        verbose_passed()
+
     cursor.close()
 
 
@@ -241,7 +300,7 @@ def audit_sql_mode(conn):
 
     NO_AUTO_CREATE_USER = "NO_AUTO_CREATE_USER"
     if NO_AUTO_CREATE_USER in sql_mode.split(","):
-        verbose("sql_mode is good")
+        verbose_passed()
     else:
         recommend("sql_mode does not contain %s" % NO_AUTO_CREATE_USER)
         desired_sql_mode = NO_AUTO_CREATE_USER
@@ -249,7 +308,7 @@ def audit_sql_mode(conn):
             desired_sql_mode += ","+sql_mode
         query = "SET GLOBAL sql_mode = '%s';" % desired_sql_mode
         print query
-    
+
 def audit_old_passwords(conn):
     verbose_topic("Checking old_passwords setting")
     cursor = conn.cursor(MySQLdb.cursors.DictCursor)
@@ -260,9 +319,9 @@ def audit_old_passwords(conn):
         recommend("Old passwords are being used")
         verbose("Consider removing old-passwords from configuration. Make sure you read the manual first")
     else:
-        verbose("New passwords are used.")
+        verbose_passed()
     cursor.close()
-    
+
 def audit_skip_networking(conn):
     verbose_topic("Checking networking")
     cursor = conn.cursor(MySQLdb.cursors.DictCursor)
@@ -276,7 +335,7 @@ def audit_skip_networking(conn):
         verbose("Networking is disabled")
 
     cursor.close()
-    
+
 def audit_test_database(conn):
     verbose_topic("Checking for `test` database existance")
     cursor = conn.cursor()
@@ -287,7 +346,7 @@ def audit_test_database(conn):
         query = "DROP DATABASE test;"
         print query
     else:
-        verbose("`test` database not found")
+        verbose_passed()
 
     cursor.close()
 
@@ -295,27 +354,30 @@ def audit_test_database(conn):
 try:
     try:
         privileges_admin = ["SUPER", "SHUTDOWN", "RELOAD", "PROCESS", "CREATE USER", "REPLICATION CLIENT", "REPLICATION SLAVE", ]
-        privileges_extreme_dml = ["CREATE", "DROP", "EVENT", "ALTER", "INDEX", "TRIGGER", "CREATE VIEW", "ALTER ROUTINE", "CREATE ROUTINE", ]
+        privileges_ddl = ["CREATE", "DROP", "EVENT", "ALTER", "INDEX", "TRIGGER", "CREATE VIEW", "ALTER ROUTINE", "CREATE ROUTINE", ]
         privileges_dml = ["DELETE", "INSERT", "UPDATE", "CREATE TEMPORARY TABLES", ]
         conn = None
         (options, args) = parse_options()
         conn = open_connection()
-        
+
         audit_root_user(conn)
         audit_anonymous_user(conn)
         audit_any_host(conn)
-        
+
         audit_empty_passwords_accounts(conn)
         audit_identical_passwords_accounts(conn)
-        
+
         audit_all_privileges(conn)
         audit_admin_privileges(conn)
-        
+        audit_global_ddl_privileges(conn)
+        audit_db_ddl_privileges(conn)
+        audit_global_dml_privileges(conn)
+
         audit_sql_mode(conn)
         audit_old_passwords(conn)
-        audit_skip_networking(conn)        
+        audit_skip_networking(conn)
         audit_test_database(conn)
-        
+
     except Exception, err:
         print err[-1]
 finally:

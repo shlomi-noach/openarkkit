@@ -31,6 +31,8 @@ def parse_options():
     parser.add_option("-P", "--port", dest="port", type="int", default="3306", help="TCP/IP port (default: 3306)")
     parser.add_option("-S", "--socket", dest="socket", default="/var/run/mysqld/mysql.sock", help="MySQL socket file. Only applies when host is localhost")
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
+    parser.add_option("--account-user", dest="account_user", help="A specific user for whom to show grants")
+    parser.add_option("--account-host", dest="account_host", help="A specific host for which to show grants")
     return parser.parse_args()
 
 def open_connection():
@@ -56,6 +58,10 @@ def show_grants(conn):
     for row in cursor.fetchall():
         try:
             user, host = row["user"], row["host"]
+            if options.account_user and options.account_user != user:
+                continue
+            if options.account_host and options.account_host != host:
+                continue
             if not (user, host) in found_grants:
                 print "-- grants for '%s'@'%s'" % (user, host,)
             found_grants.add((user,host,))
