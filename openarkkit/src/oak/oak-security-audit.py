@@ -292,6 +292,32 @@ def audit_global_dml_privileges(conn):
     cursor.close()
 
 
+def audit_mysql_privileges(conn):
+    verbose_topic("Looking for (non-root) accounts with write privileges on the mysql schema")
+    cursor = conn.cursor(MySQLdb.cursors.DictCursor)
+    query = "SELECT GRANTEE, GROUP_CONCAT(PRIVILEGE_TYPE) AS privileges, TABLE_SCHEMA FROM information_schema.SCHEMA_PRIVILEGES WHERE TABLE_SCHEMA='mysql' AND PRIVILEGE_TYPE IN %s GROUP BY GRANTEE" % get_in_query(privileges_ddl+privileges_dml)
+    cursor.execute(query)
+
+    suspicious_grantees = []
+    for row in cursor.fetchall():
+        grantee, privileges = (row["GRANTEE"], row["privileges"],)
+        write_privileges = [privilege for privilege in privileges.split(",") if privilege in privileges_ddl+privileges_dml]
+        if not grantee.startswith("'root'"):
+            suspicious_grantees.append((grantee, write_privileges,))
+
+    if suspicious_grantees:
+        verbose("There are %d non-root accounts with write privileges on the mysql schema" % len(suspicious_grantees))
+        verbose("These accounts can drop or alter tables in those schemas, or drop the schema itself.")
+        recommend("data definition privileges are: %s" % ", ".join(privileges_ddl))
+        for grantee, write_privileges in suspicious_grantees:
+            query = 'REVOKE %s ON "mysql".* FROM %s;' % (",".join(write_privileges), grantee,)
+            print query
+    else:
+        verbose_passed()
+
+    cursor.close()
+
+
 def audit_sql_mode(conn):
     verbose_topic("Checking global sql_mode")
     cursor = conn.cursor(MySQLdb.cursors.DictCursor)
@@ -372,6 +398,7 @@ try:
         audit_global_ddl_privileges(conn)
         audit_db_ddl_privileges(conn)
         audit_global_dml_privileges(conn)
+        audit_mysql_privileges(conn)
 
         audit_sql_mode(conn)
         audit_old_passwords(conn)
