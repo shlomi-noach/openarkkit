@@ -36,23 +36,29 @@ def parse_options():
     parser.add_option("--print-only", action="store_true", dest="print_only", help="Do not execute. Only print statement")
     return parser.parse_args()
 
+
 def verbose(message):
     if options.verbose:
         print "-- %s" % message
+
 
 def verbose_topic(message):
     verbose("")
     verbose(message)
     verbose("-"*len(message))
 
+
 def recommend(message):
     verbose(message+". Recommended actions:")
+
 
 def verbose_passed():
     verbose("Passed")
 
+
 def print_error(message):
     print "-- ERROR: %s" % message
+
 
 def get_in_query(list):
     return "(" + ", ".join([ "'%s'" % item for item in list ]) + ")"
