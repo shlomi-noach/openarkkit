@@ -31,6 +31,7 @@ def parse_options():
     parser.add_option("-P", "--port", dest="port", type="int", default="3306", help="TCP/IP port (default: 3306)")
     parser.add_option("-S", "--socket", dest="socket", default="/var/run/mysqld/mysql.sock", help="MySQL socket file. Only applies when host is localhost")
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
+    parser.add_option("-r", "--assume-root", dest="assume_root", default=None, help="Comma seperated list of users which are to be treated as 'root'")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     parser.add_option("--print-only", action="store_true", dest="print_only", help="Do not execute. Only print statement")
     return parser.parse_args()
@@ -56,6 +57,15 @@ def print_error(message):
 def get_in_query(list):
     return "(" + ", ".join([ "'%s'" % item for item in list ]) + ")"
 
+def get_root_users_in_query():
+    return get_in_query(root_users)
+
+def grantee_is_root(grantee):
+    grantee_user = grantee.split("@")[0]
+    if grantee_user.startswith("'") and grantee_user.endswith("'"):
+        grantee_user = grantee_user[1:-1]
+    return grantee_user in root_users
+
 def open_connection():
     if options.defaults_file:
         conn = MySQLdb.connect(read_default_file = options.defaults_file)
@@ -76,7 +86,7 @@ def open_connection():
 def audit_root_user(conn):
     verbose_topic("Looking for non local 'root' accounts")
     cursor = conn.cursor(MySQLdb.cursors.DictCursor)
-    cursor.execute("SELECT user,host FROM mysql.user WHERE user='root' AND host NOT IN ('localhost', '127.0.0.1')")
+    cursor.execute("SELECT user,host FROM mysql.user WHERE user IN %s AND host NOT IN ('localhost', '127.0.0.1')" % get_root_users_in_query())
     rows = cursor.fetchall()
     if rows:
         recommend("Found %d non local 'root' accounts" % len(rows))
@@ -183,7 +193,7 @@ def audit_all_privileges(conn):
             grants = grant_cursor.fetchall()
 
             for grant in [grantrow[0] for grantrow in grants]:
-                if grant.startswith("GRANT ALL PRIVILEGES ON *.* TO") and user != "root":
+                if grant.startswith("GRANT ALL PRIVILEGES ON *.* TO") and not user in get_root_users_in_query():
                     query = "GRANT <specific privileges> ON *.* TO '%s'@'%s';" % (user, host,)
                     permissive_privileges.append((user,host,query,))
             grant_cursor.close()
@@ -207,7 +217,7 @@ def audit_admin_privileges(conn):
     cursor.execute(query)
 
     grantees = [row["GRANTEE"] for row in cursor.fetchall()]
-    suspicious_grantees = [grantee for grantee in grantees if not grantee.startswith("'root'")]
+    suspicious_grantees = [grantee for grantee in grantees if not grantee_is_root(grantee)]
 
     if suspicious_grantees:
         verbose("There are %d non-root accounts with admin privileges" % len(suspicious_grantees))
@@ -228,7 +238,7 @@ def audit_global_ddl_privileges(conn):
     cursor.execute(query)
 
     grantees = [row["GRANTEE"] for row in cursor.fetchall()]
-    suspicious_grantees = [grantee for grantee in grantees if not grantee.startswith("'root'")]
+    suspicious_grantees = [grantee for grantee in grantees if not grantee_is_root(grantee)]
 
     if suspicious_grantees:
         verbose("There are %d non-root accounts with global data definition privileges." % len(suspicious_grantees))
@@ -253,7 +263,7 @@ def audit_db_ddl_privileges(conn):
     suspicious_grantees = []
     for row in cursor.fetchall():
         grantee, schema = (row["GRANTEE"], row["TABLE_SCHEMA"],)
-        if not grantee.startswith("'root'"):
+        if not grantee_is_root(grantee):
             suspicious_grantees.append((grantee, schema,))
 
     if suspicious_grantees:
@@ -276,7 +286,7 @@ def audit_global_dml_privileges(conn):
     cursor.execute(query)
 
     grantees = [row["GRANTEE"] for row in cursor.fetchall()]
-    suspicious_grantees = [grantee for grantee in grantees if not grantee.startswith("'root'")]
+    suspicious_grantees = [grantee for grantee in grantees if not grantee_is_root(grantee)]
 
     if suspicious_grantees:
         verbose("There are %d non-root accounts with global data manipulation privileges." % len(suspicious_grantees))
@@ -302,7 +312,7 @@ def audit_mysql_privileges(conn):
     for row in cursor.fetchall():
         grantee, privileges = (row["GRANTEE"], row["privileges"],)
         write_privileges = [privilege for privilege in privileges.split(",") if privilege in privileges_ddl+privileges_dml]
-        if not grantee.startswith("'root'"):
+        if not grantee_is_root(grantee):
             suspicious_grantees.append((grantee, write_privileges,))
 
     if suspicious_grantees:
@@ -385,6 +395,14 @@ try:
         conn = None
         (options, args) = parse_options()
         conn = open_connection()
+
+        root_users = set([])
+        root_users.add("root")
+        if options.assume_root:
+            for user in options.assume_root.split(","):
+                root_users.add(user.strip())
+
+        verbose("The following users are assumed as root: %s" % ", ".join(root_users))
 
         audit_root_user(conn)
         audit_anonymous_user(conn)
