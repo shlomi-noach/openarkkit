@@ -32,6 +32,7 @@ def parse_options():
     parser.add_option("-S", "--socket", dest="socket", default="/var/run/mysqld/mysql.sock", help="MySQL socket file. Only applies when host is localhost")
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
     parser.add_option("-r", "--assume-root", dest="assume_root", default=None, help="Comma seperated list of users which are to be treated as 'root'")
+    parser.add_option("-l", "--audit-level", dest="audit_level", default="strict", help="Level of auditing tests: 'normal' or 'strict' (default)")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     parser.add_option("--print-only", action="store_true", dest="print_only", help="Do not execute. Only print statement")
     return parser.parse_args()
@@ -72,6 +73,9 @@ def grantee_is_root(grantee):
         grantee_user = grantee_user[1:-1]
     return grantee_user in root_users
 
+def is_strict():
+    return options.audit_level == "strict"
+
 def open_connection():
     if options.defaults_file:
         conn = MySQLdb.connect(read_default_file = options.defaults_file)
@@ -99,7 +103,8 @@ def audit_root_user(conn):
         for row in rows:
             try:
                 user, host = row["user"], row["host"]
-                query = "DROP USER '%s'@'%s';" % (user, host,)
+                query = "RENAME USER '%s'@'%s' TO '%s'@'localhost';" % (user, host, user,)
+                #query = "DROP USER '%s'@'%s';" % (user, host,)
                 print query
             except:
                 print_error("-- Cannot %s" % query)
@@ -402,6 +407,12 @@ try:
         (options, args) = parse_options()
         conn = open_connection()
 
+        options.audit_level = options.audit_level.lower()
+        if not options.audit_level in ["normal", "strict"]:
+            print_error("audit-level must be one of 'normal', 'strict'")
+            exit(1)
+        verbose("Auditing in %s level" % options.audit_level)
+
         root_users = set([])
         root_users.add("root")
         if options.assume_root:
@@ -419,14 +430,16 @@ try:
 
         audit_all_privileges(conn)
         audit_admin_privileges(conn)
-        audit_global_ddl_privileges(conn)
-        audit_db_ddl_privileges(conn)
-        audit_global_dml_privileges(conn)
         audit_mysql_privileges(conn)
+        audit_global_ddl_privileges(conn)
+        if is_strict():
+            audit_db_ddl_privileges(conn)
+            audit_global_dml_privileges(conn)
 
         audit_sql_mode(conn)
-        audit_old_passwords(conn)
-        audit_skip_networking(conn)
+        if is_strict():
+            audit_old_passwords(conn)
+            audit_skip_networking(conn)
         audit_test_database(conn)
 
     except Exception, err:
