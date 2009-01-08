@@ -63,7 +63,7 @@ def open_connection():
             unix_socket = options.socket)
     return conn;
 
-def act_final_query(query, should_sleep, num_remaining_values):        
+def act_final_query(query, should_sleep, num_remaining_values):
     """
     Either print or execute the given query
     """
@@ -81,7 +81,7 @@ def act_final_query(query, should_sleep, num_remaining_values):
                 print_error("error executing: %s" % query)
         finally:
             update_cursor.close()
-            
+
 
 def get_column_property(full_column, property):
     """
@@ -95,7 +95,7 @@ def get_column_property(full_column, property):
 
     property_value = row[property]
     cursor.close()
-    
+
     return property_value
 
 def force_ri(conn):
@@ -104,15 +104,15 @@ def force_ri(conn):
     """
     parent_table = ".".join(options.parent_column.split(".")[:-1])
     child_table = ".".join(options.child_column.split(".")[:-1])
-    
+
     cursor = conn.cursor()
     query = "SELECT DISTINCT %s FROM %s WHERE %s NOT IN (SELECT %s FROM %s)" % (options.child_column, child_table, options.child_column, options.parent_column, parent_table )
-    
+
     cursor.execute(query)
     result_set = cursor.fetchall()
     invalid_values = [row[0] for row in result_set]
     cursor.close()
-    
+
     if not invalid_values:
         verbose("No invalid values found. Will do nothing")
         return
@@ -122,12 +122,12 @@ def force_ri(conn):
     if character_set_name:
         verbose("child column is textual")
         invalid_values = ["'"+value+"'" for value in invalid_values]
-    
+
     if options.chunk_size == 0:
         options.chunk_size = len(invalid_values)
-    
+
     verbose("Found %d distinct invalid values. Will handle in chunks of %d" % (len(invalid_values), options.chunk_size))
-        
+
     while invalid_values:
         # slice up next chunk:
         chunk = invalid_values[0:options.chunk_size]
@@ -147,7 +147,7 @@ try:
         if not options.parent_column or not options.child_column:
             print_error("Both --parent and --child must be specified")
             exit(1)
-        
+
         parent_column_tokens = options.parent_column.split(".")
         if len(parent_column_tokens) != 3:
             print_error("parent column must in the following format: schema_name.table_name.column_name")
@@ -168,7 +168,7 @@ try:
 
         options.safety_level = options.safety_level.lower()
         if not options.safety_level in safety_levels.keys():
-            print_error("action must be one of 'none', 'normal', 'high'")
+            print_error("safety-level must be one of 'none', 'normal', 'high'")
             exit(1)
         options.sleep_millis = max(0, options.sleep_millis)
 
@@ -206,7 +206,7 @@ try:
             for error in safety_errors:
                 print_error(error)
             exit(1)
-            
+
         force_ri(conn)
 
     except Exception, err:
