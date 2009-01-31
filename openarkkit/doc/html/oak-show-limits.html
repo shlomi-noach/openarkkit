@@ -1,0 +1,89 @@
+<h3>NAME</h3>
+oak-show-limits: show AUTO_INCREMENT "free space"
+<h3>SYNOPSIS</h3>
+Show all AUTO_INCREMENT columns, current AUTO_INCREMENT values and upper bounds, usage ratio, on all schemata and on all tables:
+<blockquote>oak-show-limits</blockquote>
+As above, for tables in the `world` database only:
+<blockquote>oak-show-limits --database=world</blockquote>
+As above, on the given table only:
+<blockquote>oak-show-limits --database=world --table=City</blockquote>
+Only diagnose columns named `id`, on all schemata and all tables:
+<blockquote>oak-show-limits --column=id</blockquote>
+Only report columns where the current AUTO_INCREMENT value exceeds 10% of upper bound.
+<blockquote>oak-show-limits --threshold=0.1</blockquote>
+Same as above, provide connection parameters, prompt for password:
+<blockquote>oak-show-limits --user=root --ask-pass --socket=/tmp/mysql.sock -l 0.1</blockquote>
+Same as above, use defaults file:
+<blockquote>oak-show-limits --defaults-file=/home/myuser/.my-oak.cnf -l 0.1</blockquote>
+<h3>DESCRIPTION</h3>
+oak-show-limits looks for AUTO_INCREMENT columns, and compares current values with the column type. It reports those columns where the AUTO_INCREMENT value is higher than a given threshold.
+
+This utility can be used for diagnosing underestimated and overestimated  data type ranges. Underestimated data types are those in which the AUTO_INCRMENET current value is approaching the upper limit. Overestimated data types are those where the current value is extremely far from the upper limit.
+
+Output is in tab delimited, where each row specifies:
+<ul>
+	<li>An AUTO_INCREMENT fully qualified column name</li>
+	<li>Current AUTO_INCREMENT value and upper bound</li>
+	<li>Usage ratio (max value/upper bound)</li>
+</ul>
+<h3>OPTIONS</h3>
+--ask-pass
+<p style="padding-left: 30px;">Prompt for password.</p>
+
+-c COLUMN_NAME, --column=COLUMN_NAME
+<p style="padding-left: 30px;">AUTO_INCREMENT column name (leave blank for all AUTO_INCREMENT columns)</p>
+
+-d DATABASE_NAME, --database=DATABASE_NAME
+<p style="padding-left: 30px;">Database name (if not specified, all schemata are analyzed)</p>
+
+--defaults-file=DEFAULTS_FILE
+<p style="padding-left: 30px;">Read from MySQL configuration file. Overrides --user, --password, --socket, --port.</p>
+<p style="padding-left: 30px;">Configuration needs to be in the following format:</p>
+
+<p style="padding-left: 30px;"><strong>[client]
+user=my_user
+password=my_pass
+socket=/tmp/mysql.sock
+port=3306</strong>
+
+-H HOST, --host=HOST
+<p style="padding-left: 30px;">MySQL host (default: localhost)</p>
+
+-l RATIO_THRESHOLD, --threshold=RATIO_THRESHOLD
+<p style="padding-left: 30px;">Only show ratios larger than given threshold in range [0..1)</p>
+
+-p PASSWORD, --password=PASSWORD
+<p style="padding-left: 30px;">MySQL password</p>
+
+-P PORT, --port=PORT
+<p style="padding-left: 30px;">TCP/IP port (default: 3306)</p>
+
+-S SOCKET, --socket=SOCKET
+<p style="padding-left: 30px;">MySQL socket file. Only applies when host is localhost</p>
+
+-t TABLE_NAME, --table=TABLE_NAME
+<p style="padding-left: 30px;">Table name (if not specified, all tables are analyzed)</p>
+
+-u USER, --user=USER
+<p style="padding-left: 30px;">MySQL user</p>
+
+<h3>ENVIRONMENT</h3>
+Requires MySQL 5.0 or newer, python 2.3 or newer.
+
+python-mysqldb must be installed in order to use this tool. You can
+<blockquote>apt-get install python-mysqldb</blockquote>
+or
+<blockquote>yum install mysql-python</blockquote>
+<h3>SEE ALSO</h3>
+<h3>LICENSE</h3>
+This tool is released under the BSD license.
+<blockquote>Copyright (c) 2008, Shlomi Noach
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+* Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+* Neither the name of the organization nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</blockquote>
+<h3>AUTHOR</h3>
+Shlomi Noach

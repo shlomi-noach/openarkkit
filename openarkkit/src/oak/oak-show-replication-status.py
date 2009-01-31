@@ -34,6 +34,7 @@ def parse_options():
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
     parser.add_option("-n", "--expect-num-slaves", dest="expect_num_slaves", type="int", default="0", help="Number of slaves to expect (default: 0)")
     parser.add_option("-d", "--normal-delay", dest="normal_delay", type="int", default="0", help="Acceptable seconds behind master for slaves")
+    parser.add_option("", "--skip-show-slave-hosts", action="store_true", dest="skip_show_slave_hosts", help="Do not use SHOW SLAVE HOSTS to find slaves")
     return parser.parse_args()
 
 def verbose(message):
@@ -55,8 +56,10 @@ def open_master_connection():
             pass
         username = config.get('client','user')
         password = config.get('client','password')
+        port_number = config.get('client','port')
     else:
         username = options.user
+        port_number = options.port
         if options.prompt_password:
             password=getpass.getpass()
         else:
@@ -91,14 +94,15 @@ def get_slave_hosts():
     """
     found_slave_hosts = []
     cursor = None;
-    try:
-        cursor = master_connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SHOW SLAVE HOSTS")
-        result_set = cursor.fetchall()
-        found_slave_hosts = [row["Host"] for row in result_set]
-    finally:
-        if cursor:
-            cursor.close()
+    if not options.skip_show_slave_hosts:
+        try:
+            cursor = master_connection.cursor(MySQLdb.cursors.DictCursor)
+            cursor.execute("SHOW SLAVE HOSTS")
+            result_set = cursor.fetchall()
+            found_slave_hosts = [row["Host"] for row in result_set]
+        finally:
+            if cursor:
+                cursor.close()
     if not found_slave_hosts:
         # Couldn't get explicit hosts. Then we'll try to figure them out by SHOW PROCESSLIST.
         # This is less preferable, since the SUPER privilege will be required.
@@ -106,7 +110,7 @@ def get_slave_hosts():
             cursor = master_connection.cursor(MySQLdb.cursors.DictCursor)
             cursor.execute("SHOW PROCESSLIST")
             result_set = cursor.fetchall()
-            slave_hosts = [row["Host"].split(":")[0] for row in result_set if row["Command"] in ("Binlog Dump", "Table Dump")]
+            slave_hosts = [row["Host"].split(":")[0] for row in result_set if row["Command"].strip().lower() in ("binlog dump", "table dump")]
         finally:
             if cursor:
                 cursor.close()
@@ -121,7 +125,7 @@ def show_slaves_master_log_files():
         slave_connection = None
         try:
             try:
-                slave_connection = MySQLdb.connect(host = slave_host, user = username, passwd = password, port = options.port)
+                slave_connection = MySQLdb.connect(host = slave_host, user = username, passwd = password, port = port_number)
                 slave_cursor = slave_connection.cursor(MySQLdb.cursors.DictCursor)
                 slave_cursor.execute("SHOW SLAVE STATUS")
                 slave_status = slave_cursor.fetchone()

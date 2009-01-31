@@ -36,6 +36,8 @@ def parse_options():
     parser.add_option("--pro-slaves", action="store_true", dest="pro_slaves", help="Pro-slaves")
     parser.add_option("-r", "--retain-logs", dest="retain_logs", type="int", default="5", help="Number of logs to retain on master (default: 5)")
     parser.add_option("-n", "--expect-num-slaves", dest="expect_num_slaves", type="int", default="-1", help="Number of slaves to expect (default: -1 = No expectation)")
+    parser.add_option("", "--skip-show-slave-hosts", action="store_true", dest="skip_show_slave_hosts", help="Do not use SHOW SLAVE HOSTS to find slaves")
+    parser.add_option("-f", "--flush-logs", action="store_true", dest="flush_logs", help="Perform FLUSH LOGS on startup")
     parser.add_option("--print-only", action="store_true", dest="print_only", help="Do not execute. Only print statement")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     return parser.parse_args()
@@ -47,6 +49,25 @@ def verbose(message):
 def print_error(message):
     print "-- ERROR: %s" % message
 
+
+def act_final_query(query, verbose_message):        
+    """
+    Either print or execute the given query
+    """
+    if options.print_only:
+        print query
+    else:
+        update_cursor = master_connection.cursor()
+        try:
+            try:
+                update_cursor.execute(query)
+                verbose(verbose_message)
+            except:
+                print_error("error executing: %s" % query)
+        finally:
+            update_cursor.close()
+            
+            
 def open_master_connection():
     """
     Open a connection on the master
@@ -60,8 +81,10 @@ def open_master_connection():
             pass
         username = config.get('client','user')
         password = config.get('client','password')
+        port_number = config.get('client','port')
     else:
         username = options.user
+        port_number = options.port
         if options.prompt_password:
             password=getpass.getpass()
         else:
@@ -97,14 +120,15 @@ def get_slave_hosts():
     found_slave_hosts = []
     if options.expect_num_slaves:
         cursor = None;
-        try:
-            cursor = master_connection.cursor(MySQLdb.cursors.DictCursor)
-            cursor.execute("SHOW SLAVE HOSTS")
-            result_set = cursor.fetchall()
-            found_slave_hosts = [row["Host"] for row in result_set]
-        finally:
-            if cursor:
-                cursor.close()
+        if not options.skip_show_slave_hosts:
+            try:
+                cursor = master_connection.cursor(MySQLdb.cursors.DictCursor)
+                cursor.execute("SHOW SLAVE HOSTS")
+                result_set = cursor.fetchall()
+                found_slave_hosts = [row["Host"] for row in result_set]
+            finally:
+                if cursor:
+                    cursor.close()
         if not found_slave_hosts:
             # Couldn't get explicit hosts. Then we'll try to figure them out by SHOW PROCESSLIST.
             # This is less preferable, since the SUPER privilege will be required.
@@ -112,7 +136,7 @@ def get_slave_hosts():
                 cursor = master_connection.cursor(MySQLdb.cursors.DictCursor)
                 cursor.execute("SHOW PROCESSLIST")
                 result_set = cursor.fetchall()
-                slave_hosts = [row["Host"].split(":")[0] for row in result_set if row["Command"] in ("Binlog Dump", "Table Dump")]
+                found_slave_hosts = [row["Host"].split(":")[0] for row in result_set if row["Command"].strip().lower() in ("binlog dump", "table dump")]
             finally:
                 if cursor:
                     cursor.close()
@@ -127,7 +151,7 @@ def get_slaves_master_log_files():
         slave_connection = None
         try:
             try:
-                slave_connection = MySQLdb.connect(host = slave_host, user = username, passwd = password, port = options.port)
+                slave_connection = MySQLdb.connect(host = slave_host, user = username, passwd = password, port = port_number)
                 verbose("-+ Connecting to slave: %s" % slave_host)
                 slave_cursor = slave_connection.cursor(MySQLdb.cursors.DictCursor)
                 slave_cursor.execute("SHOW SLAVE STATUS")
@@ -244,6 +268,8 @@ try:
         (options, args) = parse_options()
         master_connection, username, password = open_master_connection()
 
+        if options.flush_logs:
+            act_final_query("FLUSH LOGS", "Logs have been flushed")
         master_logs = get_master_logs()
 
         verbose("Current master logs: %s" % master_logs)
