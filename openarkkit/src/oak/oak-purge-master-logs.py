@@ -81,7 +81,7 @@ def open_master_connection():
             pass
         username = config.get('client','user')
         password = config.get('client','password')
-        port_number = config.get('client','port')
+        port_number = int(config.get('client','port'))
     else:
         username = options.user
         port_number = options.port
@@ -95,7 +95,7 @@ def open_master_connection():
             passwd = password,
             port = options.port,
             unix_socket = options.socket)
-    return conn, username, password
+    return conn, username, password, port_number
 
 def get_master_logs():
     """
@@ -152,7 +152,7 @@ def get_slaves_master_log_files():
         try:
             try:
                 slave_connection = MySQLdb.connect(host = slave_host, user = username, passwd = password, port = port_number)
-                verbose("-+ Connecting to slave: %s" % slave_host)
+                verbose("-+ Connected to slave: %s" % slave_host)
                 slave_cursor = slave_connection.cursor(MySQLdb.cursors.DictCursor)
                 slave_cursor.execute("SHOW SLAVE STATUS")
                 slave_status = slave_cursor.fetchone()
@@ -266,7 +266,7 @@ try:
     try:
         master_connection = None
         (options, args) = parse_options()
-        master_connection, username, password = open_master_connection()
+        master_connection, username, password, port_number = open_master_connection()
 
         if options.flush_logs:
             act_final_query("FLUSH LOGS", "Logs have been flushed")

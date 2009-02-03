@@ -70,7 +70,7 @@ def open_master_connection():
             passwd = password,
             port = options.port,
             unix_socket = options.socket)
-    return conn, username, password
+    return conn, username, password, port_number
 
 def get_master_logs():
     """
@@ -149,7 +149,7 @@ try:
     try:
         master_connection = None
         (options, args) = parse_options()
-        master_connection, username, password = open_master_connection()
+        master_connection, username, password, port_number = open_master_connection()
 
         master_logs = get_master_logs()
         current_master_log = master_logs[-1]
