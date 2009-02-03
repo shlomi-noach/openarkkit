@@ -50,7 +50,7 @@ def print_error(message):
     print "-- ERROR: %s" % message
 
 
-def act_final_query(query, verbose_message):        
+def act_final_query(query, verbose_message):
     """
     Either print or execute the given query
     """
@@ -66,8 +66,8 @@ def act_final_query(query, verbose_message):
                 print_error("error executing: %s" % query)
         finally:
             update_cursor.close()
-            
-            
+
+
 def open_master_connection():
     """
     Open a connection on the master
@@ -277,23 +277,23 @@ try:
 
         if len(master_logs) <= options.retain_logs:
             verbose("There are %s log files on the master host, no more than the %s configured retain-logs. Will do nothing" % (len(master_logs), options.retain_logs))
-            sys.exit(0)
-        desired_master_logs = master_logs[-options.retain_logs:]
+        else:
+            desired_master_logs = master_logs[-options.retain_logs:]
 
-        slave_hosts = get_slave_hosts()
-        verbose("Slave hosts: %s" % slave_hosts)
-        # SHOW SLAVE HOSTS shows slaves from the entire topology. We wish to exclude slaves
-        # which replicate master logs not in the current master.
-        slaves_master_log_files = get_slaves_master_log_files()
-        slaves_master_log_files = [ slave_master_log_file for slave_master_log_file in slaves_master_log_files if slave_master_log_file in master_logs]
+            slave_hosts = get_slave_hosts()
+            verbose("Slave hosts: %s" % slave_hosts)
+            # SHOW SLAVE HOSTS shows slaves from the entire topology. We wish to exclude slaves
+            # which replicate master logs not in the current master.
+            slaves_master_log_files = get_slaves_master_log_files()
+            slaves_master_log_files = [ slave_master_log_file for slave_master_log_file in slaves_master_log_files if slave_master_log_file in master_logs]
 
-        if slaves_master_log_files:
-            min_slave_master_log_file = slaves_master_log_files[0]
-            max_slave_master_log_file = slaves_master_log_files[-1]
-            verbose("Slaves' master log files: %s" % slaves_master_log_files)
-        slaves_are_missing = (options.expect_num_slaves >= 0) and (len(slaves_master_log_files) < options.expect_num_slaves)
+            if slaves_master_log_files:
+                min_slave_master_log_file = slaves_master_log_files[0]
+                max_slave_master_log_file = slaves_master_log_files[-1]
+                verbose("Slaves' master log files: %s" % slaves_master_log_files)
+            slaves_are_missing = (options.expect_num_slaves >= 0) and (len(slaves_master_log_files) < options.expect_num_slaves)
 
-        handle_purging_logic()
+            handle_purging_logic()
 
     except Exception, err:
         print err
