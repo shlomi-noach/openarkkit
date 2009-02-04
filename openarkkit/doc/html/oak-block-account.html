@@ -1,12 +1,14 @@
 <h3>NAME</h3>
 oak-block-account: block or release MySQL users accounts, disabling them or enabling them to login
 <h3>SYNOPSIS</h3>
-Disable the user web@webhost1.com from logging into MySQL
+Disable the user web@webhost1.com from logging into MySQL:
 <blockquote>oak-block-account --block --account-user=web --account-host=webhost1.com</blockquote>
-Re-enable the user web@webhost1.com to log into MySQL
+Re-enable the user web@webhost1.com to log into MySQL:
 <blockquote>oak-block-account --release --account-user=web --account-host=webhost1.com</blockquote>
-Disable the user 'web' on any host from logging into MySQL
+Disable the user 'web' on any host from logging into MySQL:
 <blockquote>oak-block-account --block --account-user=web</blockquote>
+Disable the user 'web' on any host from logging into MySQL, and kill any existing connection for that user:
+<blockquote>oak-block-account --block --account-user=web --kill</blockquote>
 Same as above, provide connection parameters, prompt for password:
 <blockquote>oak-block-account --user=root --ask-pass --socket=/tmp/mysql.sock -b --account-user=web</blockquote>
 Same as above, use defaults file:
@@ -51,6 +53,9 @@ port=3306</strong>
 
 -H HOST, --host=HOST
 <p style="padding-left: 30px;">MySQL host (default: localhost)</p>
+
+-k, --kill
+<p style="padding-left: 30px;">(With --block) kill any existing connection for the blocked account.</p>
 
 -p PASSWORD, --password=PASSWORD
 <p style="padding-left: 30px;">MySQL password</p>
