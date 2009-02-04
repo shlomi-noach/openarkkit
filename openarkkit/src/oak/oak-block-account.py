@@ -34,6 +34,7 @@ def parse_options():
     parser.add_option("--account-host", dest="account_host", help="The account's host. Leave blank to apply for all hosts")
     parser.add_option("-b", "--block", action="store_true", dest="block", help="Block the specified account")
     parser.add_option("-r", "--release", action="store_true", dest="release", help="Release a blocked account")
+    parser.add_option("-k", "--kill", action="store_true", dest="kill", help="With --block: kill current blocked accounts")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     parser.add_option("--print-only", action="store_true", dest="print_only", help="Do not execute. Only print statement")
     return parser.parse_args()
@@ -61,6 +62,39 @@ def verbose(message):
 def print_error(message):
     print "-- ERROR: %s" % message
 
+def get_blocked_accounts_processes_ids():
+    """
+    Return the list of process ids which match the account details
+    """
+    blocked_accounts_processes_ids = []
+    cursor = None;
+    try:
+        cursor = conn.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute("SHOW PROCESSLIST")
+        result_set = cursor.fetchall()
+        for row in result_set:
+            user = row["User"]
+            host = row["Host"].split(":")[0]
+
+            if user == options.account_user:
+                if host == options.account_host or not options.account_host:
+                    blocked_accounts_processes_ids.append(row["Id"])
+    finally:
+        if cursor:
+            cursor.close()
+    return blocked_accounts_processes_ids
+
+def kill_blocked_accounts_processes(conn):
+    """
+    Kill the connections for the blocked account(s)
+    """
+    blocked_accounts_processes_ids = blocked_accounts_processes_ids()
+    verbose("Found %s connections to kill" % len(slow_processes_ids))
+    for process_id in blocked_accounts_processes_ids:
+        cursor = conn.cursor()
+        query = "KILL %d" % process_id
+        act_final_query(query)
+
 def is_new_password(password):
     """
     MySQL's new passwords are indicated by a 40 characters long text, prefixed by '*',
@@ -74,7 +108,7 @@ def blocked_password(password):
             return password[::-1]
     else:
         if not password.startswith("~"):
-            return "~"*25+password        
+            return "~"*25+password
     return None
 
 def released_password(password):
@@ -86,7 +120,7 @@ def released_password(password):
             return password[25:]
     return None
 
-def act_final_query(query):        
+def act_final_query(query, message):
     """
     Either print or execute the given query
     """
@@ -97,12 +131,12 @@ def act_final_query(query):
         try:
             try:
                 update_cursor.execute(query)
-                verbose("Successfuly updated password")
+                verbose(message)
             except:
                 print_error("error executing: %s" % query)
         finally:
             update_cursor.close()
-    
+
 def block_account(conn):
     if not options.account_host:
         verbose("Will act on all hosts for user %s" % options.account_user)
@@ -120,13 +154,13 @@ def block_account(conn):
             host = row['host']
             password = row['password']
             new_password = None
-            
+
             if is_new_password(password):
                 password_format = "new"
             else:
                 password_format = "old"
             verbose("password for '%s'@'%s' is in %s format" % (user, host, password_format))
-                
+
             if options.block:
                 new_password = blocked_password(password)
                 if not new_password:
@@ -136,9 +170,9 @@ def block_account(conn):
                 if not new_password:
                     print_error("Account is already released")
 
-            if new_password:            
+            if new_password:
                 update_query = "SET PASSWORD FOR '%s'@'%s' = '%s'" % (user, host, new_password)
-                act_final_query(update_query)
+                act_final_query(update_query, "Successfuly updated password")
         except Exception, err:
             print "-- Cannot change password for %s: %s" % (user, err)
     cursor.close()
@@ -153,12 +187,17 @@ try:
         if options.block and options.release:
             print_error("--block and --release may not be specified together")
             exit(1)
+        if options.kill and not options.block:
+            print_error("--kill may only be specified with --block")
+            exit(1)
         if not options.account_user:
             print_error("--account-user must be specifeid")
             exit(1)
-            
+
         conn = open_connection()
         block_account(conn)
+        if options.kill:
+            kill_blocked_accounts_processes(conn)
     except Exception, err:
         print err[-1]
 finally:
