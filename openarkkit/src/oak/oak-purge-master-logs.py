@@ -22,6 +22,7 @@ import getpass
 import MySQLdb
 from optparse import OptionParser
 import ConfigParser
+import os.path
 
 def parse_options():
     parser = OptionParser()
@@ -29,15 +30,16 @@ def parse_options():
     parser.add_option("-H", "--host", dest="host", default="localhost", help="MySQL master host")
     parser.add_option("-p", "--password", dest="password", default="", help="MySQL password. Assumed to be the same for master and slaves.")
     parser.add_option("--ask-pass", action="store_true", dest="prompt_password", help="Prompt for password")
-    parser.add_option("-P", "--port", dest="port", type="int", default="3306", help="MySQL master TCP/IP port (default: 3306)")
+    parser.add_option("-P", "--port", dest="port", type="int", default=3306, help="MySQL master TCP/IP port (default: 3306)")
     parser.add_option("-S", "--socket", dest="socket", default="/var/run/mysqld/mysql.sock", help="MySQL socket file. Only applies when master host is localhost")
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
     parser.add_option("--pro-master", action="store_true", dest="pro_master", help="Pro-master")
     parser.add_option("--pro-slaves", action="store_true", dest="pro_slaves", help="Pro-slaves")
-    parser.add_option("-r", "--retain-logs", dest="retain_logs", type="int", default="5", help="Number of logs to retain on master (default: 5)")
+    parser.add_option("-r", "--retain-logs", dest="retain_logs", type="int", default=5, help="Number of logs to retain on master (default: 5)")
     parser.add_option("-n", "--expect-num-slaves", dest="expect_num_slaves", type="int", default="-1", help="Number of slaves to expect (default: -1 = No expectation)")
     parser.add_option("", "--skip-show-slave-hosts", action="store_true", dest="skip_show_slave_hosts", help="Do not use SHOW SLAVE HOSTS to find slaves")
     parser.add_option("-f", "--flush-logs", action="store_true", dest="flush_logs", help="Perform FLUSH LOGS on startup")
+    parser.add_option("--sentinel", dest="sentinel", default="/tmp/oak-purge-master-logs.sentinel", help="Sentinel file: exit if the file exists")
     parser.add_option("--print-only", action="store_true", dest="print_only", help="Do not execute. Only print statement")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     return parser.parse_args()
@@ -266,34 +268,35 @@ try:
     try:
         master_connection = None
         (options, args) = parse_options()
-        master_connection, username, password, port_number = open_master_connection()
+        if not os.path.exists(options.sentinel):
+            master_connection, username, password, port_number = open_master_connection()
 
-        if options.flush_logs:
-            act_final_query("FLUSH LOGS", "Logs have been flushed")
-        master_logs = get_master_logs()
+            if options.flush_logs:
+                act_final_query("FLUSH LOGS", "Logs have been flushed")
+            master_logs = get_master_logs()
 
-        verbose("Current master logs: %s" % master_logs)
-        verbose("Current master log file: %s" % master_logs[-1])
+            verbose("Current master logs: %s" % master_logs)
+            verbose("Current master log file: %s" % master_logs[-1])
 
-        if len(master_logs) <= options.retain_logs:
-            verbose("There are %s log files on the master host, no more than the %s configured retain-logs. Will do nothing" % (len(master_logs), options.retain_logs))
-        else:
-            desired_master_logs = master_logs[-options.retain_logs:]
+            if len(master_logs) <= options.retain_logs:
+                verbose("There are %s log files on the master host, no more than the %s configured retain-logs. Will do nothing" % (len(master_logs), options.retain_logs))
+            else:
+                desired_master_logs = master_logs[-options.retain_logs:]
 
-            slave_hosts = get_slave_hosts()
-            verbose("Slave hosts: %s" % slave_hosts)
-            # SHOW SLAVE HOSTS shows slaves from the entire topology. We wish to exclude slaves
-            # which replicate master logs not in the current master.
-            slaves_master_log_files = get_slaves_master_log_files()
-            slaves_master_log_files = [ slave_master_log_file for slave_master_log_file in slaves_master_log_files if slave_master_log_file in master_logs]
+                slave_hosts = get_slave_hosts()
+                verbose("Slave hosts: %s" % slave_hosts)
+                # SHOW SLAVE HOSTS shows slaves from the entire topology. We wish to exclude slaves
+                # which replicate master logs not in the current master.
+                slaves_master_log_files = get_slaves_master_log_files()
+                slaves_master_log_files = [ slave_master_log_file for slave_master_log_file in slaves_master_log_files if slave_master_log_file in master_logs]
 
-            if slaves_master_log_files:
-                min_slave_master_log_file = slaves_master_log_files[0]
-                max_slave_master_log_file = slaves_master_log_files[-1]
-                verbose("Slaves' master log files: %s" % slaves_master_log_files)
-            slaves_are_missing = (options.expect_num_slaves >= 0) and (len(slaves_master_log_files) < options.expect_num_slaves)
+                if slaves_master_log_files:
+                    min_slave_master_log_file = slaves_master_log_files[0]
+                    max_slave_master_log_file = slaves_master_log_files[-1]
+                    verbose("Slaves' master log files: %s" % slaves_master_log_files)
+                slaves_are_missing = (options.expect_num_slaves >= 0) and (len(slaves_master_log_files) < options.expect_num_slaves)
 
-            handle_purging_logic()
+                handle_purging_logic()
 
     except Exception, err:
         print err
