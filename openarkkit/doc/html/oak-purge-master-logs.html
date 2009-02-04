@@ -74,6 +74,9 @@ port=3306</strong>
 -r RETAIN_LOGS, --retain-logs=RETAIN_LOGS
 <p style="padding-left: 30px;">Number of logs to retain on master (default: 5). The utility will keep at least that many logs files on master.</p>
 
+--sentinel=SENTINEL_FILE
+<p style="padding-left: 30px;">When the given file exists, oak-purge-master-logs exits without doing anything. Default: /tmp/oak-purge-master-logs.sentinel</p>
+
 --skip-show-slave-hosts
 <p style="padding-left: 30px;">When SHOW SLAVE HOSTS returns rows, these are considered the only slave hosts. Otherwise slaves are found looking at SHOW PROCESSLIST. With --skip-show-slave-hosts, only SHOW PROCESSLIST is used.</p>
 
