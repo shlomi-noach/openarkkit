@@ -33,14 +33,12 @@ def parse_options():
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
     parser.add_option("-r", "--assume-root", dest="assume_root", default=None, help="Comma seperated list of users which are to be treated as 'root'")
     parser.add_option("-l", "--audit-level", dest="audit_level", default="strict", help="Level of auditing tests: 'normal' or 'strict' (default)")
-    parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     parser.add_option("--print-only", action="store_true", dest="print_only", help="Do not execute. Only print statement")
     return parser.parse_args()
 
 
 def verbose(message):
-    if options.verbose:
-        print "-- %s" % message
+    print "-- %s" % message
 
 
 def verbose_topic(message):
