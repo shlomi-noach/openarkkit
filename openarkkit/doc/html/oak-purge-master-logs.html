@@ -16,7 +16,7 @@ Same as above, do not actually purge, just print out the PURGE statement:
 Same as above, provide connection parameters, prompt for password:
 <blockquote>oak-purge-master-logs --host=192.168.2.103  --user=root --ask-pass --socket=/tmp/mysql.sock -f -r 3 -n 2  --pro-master --pro-slaves</blockquote>
 Same as above, use defaults file:
-<blockquote>oak-purge-master-logs --defaults-file=/home/myuser/.my-oak.cnf -r 3 -n 2  --pro-master --pro-slaves</blockquote>
+<blockquote>oak-purge-master-logs --defaults-file=/home/myuser/.my-oak.cnf -f -r 3 -n 2  --pro-master --pro-slaves</blockquote>
 <h3>DESCRIPTION</h3>
 oak-purge-master-logs is a sophisticated tool which purges master logs while considering the replicating slaves.
 
