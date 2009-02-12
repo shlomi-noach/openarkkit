@@ -33,7 +33,7 @@ def parse_options():
     parser.add_option("-S", "--socket", dest="socket", default="/var/run/mysqld/mysql.sock", help="MySQL socket file. Only applies when master host is localhost")
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
     parser.add_option("-n", "--expect-num-slaves", dest="expect_num_slaves", type="int", default="0", help="Number of slaves to expect (default: 0)")
-    parser.add_option("-d", "--normal-delay", dest="normal_delay", type="int", default="0", help="Acceptable seconds behind master for slaves")
+    parser.add_option("-d", "--normal-delay", dest="normal_delay", type="int", default=0, help="Acceptable seconds behind master for slaves")
     parser.add_option("", "--skip-show-slave-hosts", action="store_true", dest="skip_show_slave_hosts", help="Do not use SHOW SLAVE HOSTS to find slaves")
     return parser.parse_args()
 
@@ -56,7 +56,7 @@ def open_master_connection():
             pass
         username = config.get('client','user')
         password = config.get('client','password')
-        port_number = config.get('client','port')
+        port_number = int(config.get('client','port'))
     else:
         username = options.user
         port_number = options.port
