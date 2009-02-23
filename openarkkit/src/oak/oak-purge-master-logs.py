@@ -268,7 +268,9 @@ try:
     try:
         master_connection = None
         (options, args) = parse_options()
-        if not os.path.exists(options.sentinel):
+        if os.path.exists(options.sentinel):
+            verbose("Sentinel file: %s found. Quitting" % options.sentinel)
+        else:
             master_connection, username, password, port_number = open_master_connection()
 
             if options.flush_logs:
