@@ -1,0 +1,13 @@
+Package: openark-kit
+Version: 0.7-1
+Section: python 
+Priority: optional
+Architecture: all
+Essential: no
+Depends: python-mysqldb
+Installed-Size: 70
+Maintainer: Shlomi Noach [shlomi@code.openark.org]
+Description: Common utilities for MySQL
+ A general purpose toolkit for managing various aspects in MySQL.
+ Most utilities in this package require MySQL 5.0 or greater.
+ Released under the BSD license

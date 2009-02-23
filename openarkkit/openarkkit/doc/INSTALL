@@ -1,0 +1,13 @@
+Untar the archive file. In the same path as this README file, execute:
+
+	sudo python setup.py install
+
+or, as user root:
+
+	python setup.py install
+
+On unix like systems, all scripts will be installed in /usr/bin/
+You must have Python >= 2.3 to install this toolkit.
+
+This toolkit has not been tested on Windows. There is currently no scheduled plan for that.
+It may work, in which case do let me know!

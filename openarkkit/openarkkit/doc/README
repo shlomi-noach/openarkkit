@@ -1,0 +1,17 @@
+openark kit
+Common utilities for MySQL
+==========================
+
+Documentation can be found on the openark kit home page, see
+http://code.openark.org/forge/openark-kit
+
+The project is hosted on Google Code, see
+http://code.google.com/p/openarkkit/
+
+Bugs can be reported on http://code.google.com/p/openarkkit/issues/list
+
+On how to install this package, please consult the INSTALL file.
+
+This toolkit is released under the BSD license.
+You should have received a copy of this license, see the LICENSE file.
+If you cannot find it, see http://www.opensource.org/licenses/bsd-license.php

@@ -1,0 +1,69 @@
+<project name="openark kit" default="dist" basedir=".">
+
+	<property name="python.distribution.dir" value="py-dist"/>
+	<property name="debian.distribution.dir" value="deb-dist"/>
+
+	<target name="clean">
+		<delete dir="build"/>
+		<delete dir="dist"/>
+		<delete dir="${python.distribution.dir}"/>
+		<delete dir="deb-dist"/>
+	</target>
+
+	<target name="scripts">
+		<mkdir dir="build/scripts"/>
+		<copy todir="build/scripts">
+			<fileset dir="src/oak">
+				<exclude name="**/__init__.py"/>
+			</fileset>
+			<globmapper from="*.py" to="*"/>
+		</copy>
+	</target>
+
+	<target name="python-module" depends="scripts">
+		<mkdir dir="${python.distribution.dir}"/>
+		<copy file="py-dist-cfg/setup.py" todir="build"/>
+		<copy file="py-dist-cfg/MANIFEST.in" todir="build"/>
+		<copy todir="build/">
+			<fileset dir="doc"/>
+		</copy>
+		<exec dir="build" executable="python">
+			<arg value="setup.py"/>
+			<arg value="sdist"/>
+		</exec>
+		<move todir="${python.distribution.dir}">
+			<fileset dir="build/dist"/>
+		</move>
+	</target>
+
+	<target name="deb" depends="scripts">
+		<mkdir dir="${debian.distribution.dir}/openark-kit/usr/bin"/>
+		<mkdir dir="${debian.distribution.dir}/openark-kit/DEBIAN"/>
+		<copy todir="${debian.distribution.dir}/openark-kit/DEBIAN">
+			<fileset dir="deb-dist-cfg/control"/>
+		</copy>
+		<copy todir="${debian.distribution.dir}/openark-kit/usr/bin">
+			<fileset dir="build/scripts"/>
+		</copy>
+		<chmod perm="755">
+			<fileset dir="${debian.distribution.dir}/openark-kit/usr/bin"/>
+		</chmod>
+		<exec dir="deb-dist" executable="dpkg-deb">
+			<arg value="--build"/>
+			<arg value="openark-kit"/>
+		</exec>
+	</target>
+
+	<target name="dist" depends="deb, python-module">
+		<mkdir dir="dist"/>
+		<copy todir="dist">
+			<fileset dir="py-dist"/>
+		</copy>
+		<copy todir="dist">
+			<fileset dir="deb-dist">
+				<include name="*.deb"/>
+			</fileset>
+		</copy>
+	</target>
+
+</project>
