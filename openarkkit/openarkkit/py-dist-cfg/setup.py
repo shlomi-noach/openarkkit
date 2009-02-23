@@ -5,7 +5,7 @@ setup(
     description="Common utilities for MySQL",
     author="Shlomi Noach",
     author_email="shlomi@code.openark.org",
-    url="http://code.openark.org/oak",
+    url="http://code.openark.org/forge/openark-kit",
     version="0.7",
     requires=["MySQLdb"],
     packages=[""],
