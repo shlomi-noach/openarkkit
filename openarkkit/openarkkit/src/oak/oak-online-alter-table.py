@@ -65,6 +65,7 @@ def open_connection():
             unix_socket = options.socket)
     return conn;
 
+
 def act_query(conn, query):
     """
     Run the given query, commit changes
