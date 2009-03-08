@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 #
-# Apply referencial integrity based on a parent-child relation between two columns.
+# Chunk a given query using an auto_increment column
 #
 # Released under the BSD license
 #
@@ -20,6 +20,7 @@
 import getpass
 import MySQLdb
 import time
+import re
 from optparse import OptionParser
 
 def parse_options():
@@ -31,11 +32,10 @@ def parse_options():
     parser.add_option("-P", "--port", dest="port", type="int", default="3306", help="TCP/IP port (default: 3306)")
     parser.add_option("-S", "--socket", dest="socket", default="/var/run/mysqld/mysql.sock", help="MySQL socket file. Only applies when host is localhost")
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
-    parser.add_option("--parent", dest="parent_column", help="Fully qualified parent (referenced) column. Must be in the following format: schema_name.table_name.column_name")
-    parser.add_option("--child", dest="child_column", help="Fully qualified child (referencing) column. Must be in the following format: schema_name.table_name.column_name")
-    parser.add_option("-a", "--action", dest="action", default="setnull", help="Action to take on invalid rows. Can be either 'delete' or 'setnull' (default)")
+    parser.add_option("-d", "--database", dest="database", help="Database name (required unless query uses fully qualified table names)")
+    parser.add_option("-e", "--execute", dest="execute_query", help="Query (UPDATE or DELETE) to execute, which contains a chunk placeholder (required)")
+    parser.add_option("-t", "--table", dest="table", help="Table with AUTO_INCREMENT column by which to chunk")
     parser.add_option("-c", "--chunk-size", dest="chunk_size", type="int", default=0, help="Number of rows to act on in chunks (default: 0; all rows updated in one operation")
-    parser.add_option("-l", "--safety-level", dest="safety_level", default="normal", help="Level of tests to make in order for action to take place: 'none', 'normal' (default), 'high'")
     parser.add_option("--sleep", dest="sleep_millis", type="int", default=0, help="Number of milliseconds to sleep between chunks. Default: 0")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     parser.add_option("--print-only", action="store_true", dest="print_only", help="Do not execute. Only print statement")
@@ -98,7 +98,6 @@ def get_column_property(full_column, property):
 
     return property_value
 
-
 def force_ri(conn):
     """
     Do the main work
@@ -145,9 +144,18 @@ try:
     try:
         conn = None
         (options, args) = parse_options()
-        if not options.parent_column or not options.child_column:
-            print_error("Both --parent and --child must be specified")
+
+        if not options.execute_query:
+            print_error("Query to execute must be provided via -e or --execute")
             exit(1)
+
+        match = re.search('OAK_CHUNK\((.*?)\)', options.execute_query)
+        if not match:
+            print_error("Query must include the following token: 'OAK_CHUNK(table_name)', where table_name should be replaced with a table which consists of an AUTO_INCREMENT column by which chunks are made.")
+            exit(1)
+
+        table_name = match.group(1)
+        print table_name
 
         parent_column_tokens = options.parent_column.split(".")
         if len(parent_column_tokens) != 3:
