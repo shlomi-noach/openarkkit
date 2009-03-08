@@ -65,7 +65,16 @@ def open_connection():
             unix_socket = options.socket)
     return conn;
 
+def act_query(conn, query):
+    """
+    Run the given query, commit changes
+    """
+    cursor = conn.cursor()
+    cursor.execute(query)
+    cursor.close()
+    conn.commit()
 
+    
 def get_column_property(full_column, property):
     """
     Given a fully qualified column name, get the given property from INFORMATION_SCHEMA.COLUMNS
@@ -170,17 +179,11 @@ def table_exists(conn, check_table_name):
 def drop_table(conn, drop_table_name):
     """
     """
- 
-    cursor = conn.cursor(MySQLdb.cursors.DictCursor)
-    
     if table_exists(conn, drop_table_name):
         query = "DROP TABLE IF EXISTS %s.%s" % (database_name, drop_table_name)
-        cursor.execute(query)
+        act_query(conn, query)
         verbose("Table %s.%s was found and dropped" % (database_name, drop_table_name))
     
-    cursor.close()
-
-
 
 def create_ghost_table(conn):
     """
@@ -188,14 +191,10 @@ def create_ghost_table(conn):
  
     drop_table(conn, ghost_table_name)
 
-    cursor = conn.cursor(MySQLdb.cursors.DictCursor)
- 
     query = "CREATE TABLE %s.%s LIKE %s.%s" % (database_name, ghost_table_name, database_name, table_name)
-    cursor.execute(query)
+    act_query(conn, query)
     verbose("Table %s.%s has been created" % (database_name, ghost_table_name))
     
-    cursor.close()
-
 
 def alter_ghost_table(conn):
     """
@@ -204,12 +203,9 @@ def alter_ghost_table(conn):
     if not options.alter_statement:
         verbose("No ALTER statement provided")
         return
-    cursor = conn.cursor(MySQLdb.cursors.DictCursor)
     query = "ALTER TABLE %s.%s %s" % (database_name, ghost_table_name, options.alter_statement)
-    cursor.execute(query)
+    act_query(conn, query)
     verbose("Table %s.%s has been altered" % (database_name, ghost_table_name))
-
-    cursor.close()
 
 
 def truncate_ghost_table(conn):
@@ -219,12 +215,9 @@ def truncate_ghost_table(conn):
     so not many rows are expected.
     """
     
-    cursor = conn.cursor(MySQLdb.cursors.DictCursor)
     query = "DELETE FROM %s.%s" % (database_name, ghost_table_name)
-    cursor.execute(query)
+    act_query(conn, query)
     verbose("Table %s.%s has been truncated" % (database_name, ghost_table_name))
-
-    cursor.close()
 
 
 def get_table_columns(conn, read_table_name):
@@ -252,47 +245,36 @@ def get_shared_columns(conn):
 
 
 def lock_tables_write(conn):
-    cursor = conn.cursor(MySQLdb.cursors.DictCursor)
     query = """
         LOCK TABLES %s.%s WRITE, %s.%s WRITE
         """ % (database_name, table_name, database_name, ghost_table_name)
-    cursor.execute(query)
+    act_query(conn, query)
     verbose("Tables locked WRITE")
-
-    cursor.close()
 
 
 def lock_tables_read(conn):
-    cursor = conn.cursor(MySQLdb.cursors.DictCursor)
     query = """
        LOCK TABLES %s.%s READ, %s.%s WRITE
          """ % (database_name, table_name, database_name, ghost_table_name)
-    cursor.execute(query)
+    act_query(conn, query)
     verbose("Tables locked READ, WRITE")
 
-    cursor.close()
-
-    
 
 def unlock_tables(conn):
-    cursor = conn.cursor(MySQLdb.cursors.DictCursor)
     query = """
         UNLOCK TABLES
         """
-    cursor.execute(query)
+    act_query(conn, query)
     verbose("Tables unlocked")
-
-    cursor.close()
 
 
 def create_custom_triggers(conn):
-    cursor = conn.cursor(MySQLdb.cursors.DictCursor)
     query = """
         CREATE TRIGGER %s.%s_AD_oak AFTER DELETE ON %s.%s
         FOR EACH ROW
             DELETE FROM %s.%s WHERE %s = OLD.%s;
         """ % (database_name, table_name, database_name, table_name, database_name, ghost_table_name, auto_increment_column_name, auto_increment_column_name)
-    cursor.execute(query)
+    act_query(conn, query)
     verbose("Created AD trigger")
 
     shared_columns_listing = ", ".join(shared_columns)
@@ -303,21 +285,21 @@ def create_custom_triggers(conn):
         FOR EACH ROW
             REPLACE INTO %s.%s (%s) VALUES (%s);
         """ % (database_name, table_name, database_name, table_name, database_name, ghost_table_name, shared_columns_listing, shared_columns_new_listing)
-    cursor.execute(query)
+    act_query(conn, query)
     verbose("Created AU trigger")
+
     query = """
         CREATE TRIGGER %s.%s_AI_oak AFTER INSERT ON %s.%s
         FOR EACH ROW
             REPLACE INTO %s.%s (%s) VALUES (%s);
-        """ % (database_name, table_name, database_name, table_name, database_name, ghost_table_name, shared_columns_listing, shared_columns_new_listing)
-    cursor.execute(query)
+        """ % (database_name, table_name, database_name, table_name, 
+               database_name, ghost_table_name, shared_columns_listing, shared_columns_new_listing)
+    act_query(conn, query)
     verbose("Created AI trigger")
-
-    cursor.close()
 
 
 def drop_custom_triggers(conn):
-    cursor = conn.cursor(MySQLdb.cursors.DictCursor)
+    cursor = conn.cursor()
     query = """
         DROP TRIGGER IF EXISTS %s.%s_AD_oak
         """ % (database_name, table_name)
@@ -342,8 +324,12 @@ def drop_custom_triggers(conn):
 def get_auto_increment_range(conn):
     cursor = conn.cursor(MySQLdb.cursors.DictCursor)
     query = """
-        SELECT MIN(%s) AS auto_increment_min_value, MAX(%s) AS auto_increment_max_value FROM %s.%s
-        """ % (auto_increment_column_name, auto_increment_column_name, database_name, table_name)
+        SELECT 
+          IFNULL(MIN(%s),0) AS auto_increment_min_value, 
+          IFNULL(MAX(%s),0) AS auto_increment_max_value 
+        FROM %s.%s
+        """ % (auto_increment_column_name, auto_increment_column_name, 
+               database_name, table_name)
     cursor.execute(query)
     row = cursor.fetchone()
     auto_increment_min_value = int(row['auto_increment_min_value'])
@@ -358,9 +344,15 @@ def get_auto_increment_range_end(auto_increment_range_start):
     cursor = conn.cursor(MySQLdb.cursors.DictCursor)
     query = """
         SELECT MAX(%s) AS auto_increment_range_end
-        FROM (SELECT %s FROM %s.%s WHERE %s >= %d ORDER BY %s LIMIT %d) SEL1
-        """ % (auto_increment_column_name, auto_increment_column_name, database_name, table_name, 
-               auto_increment_column_name, auto_increment_range_start, auto_increment_column_name, options.chunk_size)
+        FROM (SELECT %s FROM %s.%s 
+          WHERE %s >= %d 
+          AND %s <= %d  
+          ORDER BY %s LIMIT %d) SEL1
+        """ % (auto_increment_column_name, 
+               auto_increment_column_name, database_name, table_name, 
+               auto_increment_column_name, auto_increment_range_start, 
+               auto_increment_column_name, auto_increment_max_value, 
+               auto_increment_column_name, options.chunk_size)
         
     cursor.execute(query)
     row = cursor.fetchone()
@@ -395,7 +387,7 @@ def copy_data_pass(conn):
             lock_tables_read(conn)
             
         verbose("Copying range (%d, %d), %d%% progress" % (auto_increment_range_start, auto_increment_range_end, progress))
-        cursor = conn.cursor(MySQLdb.cursors.DictCursor)
+        cursor = conn.cursor()
         cursor.execute(query)
         cursor.close()
 
@@ -406,8 +398,6 @@ def copy_data_pass(conn):
         if options.sleep_millis > 0:
             verbose("Will sleep for %f seconds" % (options.sleep_millis/1000.0))
             time.sleep(options.sleep_millis/1000.0)
-
-    
 
     
 def delete_data_pass(conn):
@@ -431,7 +421,7 @@ def delete_data_pass(conn):
                 auto_increment_column_name,
                 auto_increment_column_name, database_name, table_name, auto_increment_column_name, auto_increment_range_start, auto_increment_range_end)
             
-        cursor = conn.cursor(MySQLdb.cursors.DictCursor)
+        cursor = conn.cursor()
         cursor.execute(query)
         cursor.close()
 
@@ -448,18 +438,15 @@ def rename_tables(conn):
     """
     
     drop_table(conn, archive_table_name)
-    cursor = conn.cursor(MySQLdb.cursors.DictCursor)
     query = """
         RENAME TABLE 
             %s.%s TO %s.%s, 
             %s.%s TO %s.%s
         """ % (database_name, table_name, database_name, archive_table_name,
                database_name, ghost_table_name, database_name, table_name, )
-    cursor.execute(query)
+    act_query(conn, query)
     verbose("Table %s.%s has been renamed to %s.%s" % (database_name, table_name, database_name, archive_table_name))
     verbose("Table %s.%s has been renamed to %s.%s" % (database_name, ghost_table_name, database_name, table_name))
-
-    cursor.close()
 
     
 try:
@@ -527,7 +514,7 @@ try:
             
         create_custom_triggers(conn)
         lock_tables_write(conn)
-        truncate_ghost_table(conn)
+        #truncate_ghost_table(conn)
         auto_increment_min_value, auto_increment_max_value = get_auto_increment_range(conn)
         unlock_tables(conn)
         
