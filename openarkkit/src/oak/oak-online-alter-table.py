@@ -34,6 +34,7 @@ def parse_options():
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
     parser.add_option("-d", "--database", dest="database", help="Database name (required unless table is fully qualified)")
     parser.add_option("-t", "--table", dest="table", help="Table with AUTO_INCREMENT column to alter (optionally fully qualified)")
+    parser.add_option("-g", "--ghost", dest="ghost", help="Table name to serve as ghost. This table will be created and synchronized with the original table")
     parser.add_option("-a", "--alter", dest="alter_statement", help="Comma delimited ALTER statement details, excluding the 'ALTER TABLE t' itself")
     parser.add_option("-c", "--chunk-size", dest="chunk_size", type="int", default=1000, help="Number of rows to act on in chunks. Default: 1000")
     parser.add_option("-l", "--lock-chunks", action="store_true", dest="lock_chunks", default=False, help="User LOCK TABLES for each chunk")
@@ -516,6 +517,17 @@ try:
             print_error("No database specified. Specify with fully qualified table name or with -d or --database")
             exit(1)
 
+        if options.ghost:
+            if table_exists(options.ghost):
+                print_error("Ghost table: %s.%s already exists." % (database_name, options.ghost))
+                exit(1)
+
+        if options.ghost:
+            ghost_table_name = options.ghost
+        else:
+            ghost_table_name = "__oak_"+original_table_name
+        archive_table_name = "__arc_"+original_table_name
+
         conn = open_connection()
 
         if options.cleanup:
@@ -532,9 +544,6 @@ try:
             if not auto_increment_column_name:
                 print_error("Table must have an AUTO_INCREMENT column")
                 exit(1)
-
-            ghost_table_name  = "__oak_"+original_table_name
-            archive_table_name = "__arc_"+original_table_name
 
             drop_custom_triggers()
             if not validate_no_triggers_exist():
@@ -567,9 +576,12 @@ try:
             delete_data_pass()
             reuse_conn = False
 
-            rename_tables()
-
-            verbose("ALTER TABLE completed")
+            if options.ghost:
+                verbose("Ghost table creation completed. Note that triggers on %s.%s were not removed" % (database_name, original_table_name))
+            else:
+                rename_tables()
+                drop_table(archive_table_name)
+                verbose("ALTER TABLE completed")
     except Exception, err:
         print err
 finally:
