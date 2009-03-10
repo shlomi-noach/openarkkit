@@ -38,8 +38,9 @@ def parse_options():
     parser.add_option("-c", "--chunk-size", dest="chunk_size", type="int", default=1000, help="Number of rows to act on in chunks. Default: 1000")
     parser.add_option("-l", "--lock-chunks", action="store_true", dest="lock_chunks", default=False, help="User LOCK TABLES for each chunk")
     parser.add_option("--sleep", dest="sleep_millis", type="int", default=0, help="Number of milliseconds to sleep between chunks. Default: 0")
+    parser.add_option("-c", "--cleanup", dest="cleanup", action="store_true", default=False, help="Print user friendly messages")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
-    parser.add_option("--print-only", action="store_true", dest="print_only", help="Do not execute. Only print statement")
+    parser.add_option("--print-only", dest="print_only", action="store_true", help="Do not execute. Only print statement")
     return parser.parse_args()
 
 def verbose(message):
@@ -81,8 +82,8 @@ def act_query(query):
     connection.commit()
     if not reuse_conn:
         connection.close()
-    
-    
+
+
 def get_row(query):
     if reuse_conn:
         connection = conn
@@ -115,20 +116,20 @@ def get_rows(query):
 
 def get_auto_increment_column(read_table_name):
     """
-    Return the column name (lower case) of the AUTO_INCREMENT column in the given table, 
+    Return the column name (lower case) of the AUTO_INCREMENT column in the given table,
     or None if no such column is found.
     """
     auto_increment_column_name = None
-    
+
     query = """
-        SELECT COLUMN_NAME 
-        FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_SCHEMA='%s' 
-            AND TABLE_NAME='%s' 
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA='%s'
+            AND TABLE_NAME='%s'
             AND LOCATE('auto_increment', EXTRA) > 0
         """ % (database_name, read_table_name)
     row = get_row(query)
-    
+
     if row:
         auto_increment_column_name = row['COLUMN_NAME'].lower()
     verbose("%s.%s AUTO_INCREMENT column is %s" % (database_name, read_table_name, auto_increment_column_name))
@@ -141,14 +142,14 @@ def get_table_engine():
     Return the storage engine (lowercase) the given table belongs to.
     """
     engine = None
-    
+
     query = """
         SELECT ENGINE
         FROM INFORMATION_SCHEMA.TABLES
-        WHERE TABLE_SCHEMA='%s' 
-            AND TABLE_NAME='%s' 
+        WHERE TABLE_SCHEMA='%s'
+            AND TABLE_NAME='%s'
         """ % (database_name, original_table_name)
-    
+
     row = get_row(query)
     if row:
         engine = row['ENGINE'].lower()
@@ -159,18 +160,18 @@ def get_table_engine():
 
 def validate_no_triggers_exist():
     """
-    No 'AFTER' triggers allowed on table, since this utility creates all three AFTER 
+    No 'AFTER' triggers allowed on table, since this utility creates all three AFTER
     triggers (INSERT, UPDATE, DELETE)
     """
-   
+
     query = """
-        SELECT COUNT(*) AS count 
-        FROM INFORMATION_SCHEMA.TRIGGERS 
-        WHERE TRIGGER_SCHEMA='%s' 
-            AND EVENT_OBJECT_TABLE='%s' 
+        SELECT COUNT(*) AS count
+        FROM INFORMATION_SCHEMA.TRIGGERS
+        WHERE TRIGGER_SCHEMA='%s'
+            AND EVENT_OBJECT_TABLE='%s'
             AND ACTION_TIMING='AFTER'
         """ % (database_name, original_table_name)
-    
+
     row = get_row(query)
     count = int(row['count'])
 
@@ -182,14 +183,14 @@ def table_exists(check_table_name):
     See if the a given table exists:
     """
     count = 0
-    
+
     query = """
-        SELECT COUNT(*) AS count 
-        FROM INFORMATION_SCHEMA.TABLES 
-        WHERE TABLE_SCHEMA='%s' 
+        SELECT COUNT(*) AS count
+        FROM INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_SCHEMA='%s'
             AND TABLE_NAME='%s'
         """ % (database_name, check_table_name)
-    
+
     row = get_row(query)
     count = int(row['count'])
 
@@ -204,26 +205,26 @@ def drop_table(drop_table_name):
         query = "DROP TABLE IF EXISTS %s.%s" % (database_name, drop_table_name)
         act_query(query)
         verbose("Table %s.%s was found and dropped" % (database_name, drop_table_name))
-    
+
 
 def create_ghost_table():
     """
-    Create the ghost table in the likes of the original table. 
+    Create the ghost table in the likes of the original table.
     Later on, it will be altered.
     """
- 
+
     drop_table(ghost_table_name)
 
     query = "CREATE TABLE %s.%s LIKE %s.%s" % (database_name, ghost_table_name, database_name, original_table_name)
     act_query(query)
     verbose("Table %s.%s has been created" % (database_name, ghost_table_name))
-    
+
 
 def alter_ghost_table():
     """
     Perform the ALTER TABLE on the ghost table
     """
-        
+
     if not options.alter_statement:
         verbose("No ALTER statement provided")
         return
@@ -238,7 +239,7 @@ def truncate_ghost_table():
     We expect this to be quick, though, as it is performed instantly after adding the trigegrs,
     so not many rows are expected.
     """
-    
+
     query = "DELETE FROM %s.%s" % (database_name, ghost_table_name)
     act_query(query)
     verbose("Table %s.%s has been truncated" % (database_name, ghost_table_name))
@@ -249,10 +250,10 @@ def get_table_columns(read_table_name):
     Return the list of column names (lowercase) for the given table
     """
     query = """
-        SELECT COLUMN_NAME 
-        FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_SCHEMA='%s' 
-            AND TABLE_NAME='%s' 
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA='%s'
+            AND TABLE_NAME='%s'
         """ % (database_name, read_table_name)
     column_names = set([row["COLUMN_NAME"].lower() for row in get_rows(query)])
 
@@ -261,14 +262,14 @@ def get_table_columns(read_table_name):
 
 def get_shared_columns():
     """
-    Return the set of columns which are shared between the original table 
+    Return the set of columns which are shared between the original table
     and the ghost (altered) table.
     """
     original_columns = get_table_columns(original_table_name)
     ghost_columns = get_table_columns(ghost_table_name)
     shared_columns  = original_columns.intersection(ghost_columns)
     verbose("Shared columns: %s" % ", ".join(shared_columns))
-    
+
     return shared_columns
 
 
@@ -317,7 +318,7 @@ def create_custom_triggers():
         CREATE TRIGGER %s.%s_AD_oak AFTER DELETE ON %s.%s
         FOR EACH ROW
             DELETE FROM %s.%s WHERE %s = OLD.%s;
-        """ % (database_name, original_table_name, database_name, original_table_name, 
+        """ % (database_name, original_table_name, database_name, original_table_name,
                database_name, ghost_table_name, auto_increment_column_name, auto_increment_column_name)
     act_query(query)
     verbose("Created AD trigger")
@@ -329,7 +330,7 @@ def create_custom_triggers():
         CREATE TRIGGER %s.%s_AU_oak AFTER UPDATE ON %s.%s
         FOR EACH ROW
             REPLACE INTO %s.%s (%s) VALUES (%s);
-        """ % (database_name, original_table_name, database_name, original_table_name, 
+        """ % (database_name, original_table_name, database_name, original_table_name,
                database_name, ghost_table_name, shared_columns_listing, shared_columns_new_listing)
     act_query(query)
     verbose("Created AU trigger")
@@ -338,7 +339,7 @@ def create_custom_triggers():
         CREATE TRIGGER %s.%s_AI_oak AFTER INSERT ON %s.%s
         FOR EACH ROW
             REPLACE INTO %s.%s (%s) VALUES (%s);
-        """ % (database_name, original_table_name, database_name, original_table_name, 
+        """ % (database_name, original_table_name, database_name, original_table_name,
                database_name, ghost_table_name, shared_columns_listing, shared_columns_new_listing)
     act_query(query)
     verbose("Created AI trigger")
@@ -365,18 +366,18 @@ def drop_custom_triggers():
         """ % (database_name, original_table_name)
     act_query(query)
     verbose("Dropped custom AU trigger")
-    
+
 
 def get_auto_increment_range():
     """
     Return the MIN and MAX values for the AUTO INCREMENT column in the original table
     """
     query = """
-        SELECT 
-          IFNULL(MIN(%s),0) AS auto_increment_min_value, 
-          IFNULL(MAX(%s),0) AS auto_increment_max_value 
+        SELECT
+          IFNULL(MIN(%s),0) AS auto_increment_min_value,
+          IFNULL(MAX(%s),0) AS auto_increment_max_value
         FROM %s.%s
-        """ % (auto_increment_column_name, auto_increment_column_name, 
+        """ % (auto_increment_column_name, auto_increment_column_name,
                database_name, original_table_name)
     row = get_row(query)
     auto_increment_min_value = int(row['auto_increment_min_value'])
@@ -384,31 +385,31 @@ def get_auto_increment_range():
     verbose("%s (min, max) values: (%d, %d)" % (auto_increment_column_name, auto_increment_min_value, auto_increment_max_value))
 
     return auto_increment_min_value, auto_increment_max_value
-    
-    
-def get_auto_increment_range_end(auto_increment_range_start):    
+
+
+def get_auto_increment_range_end(auto_increment_range_start):
     query = """
         SELECT MAX(%s) AS auto_increment_range_end
-        FROM (SELECT %s FROM %s.%s 
-          WHERE %s >= %d 
-          AND %s <= %d  
+        FROM (SELECT %s FROM %s.%s
+          WHERE %s >= %d
+          AND %s <= %d
           ORDER BY %s LIMIT %d) SEL1
-        """ % (auto_increment_column_name, 
-               auto_increment_column_name, database_name, original_table_name, 
-               auto_increment_column_name, auto_increment_range_start, 
-               auto_increment_column_name, auto_increment_max_value, 
+        """ % (auto_increment_column_name,
+               auto_increment_column_name, database_name, original_table_name,
+               auto_increment_column_name, auto_increment_range_start,
+               auto_increment_column_name, auto_increment_max_value,
                auto_increment_column_name, options.chunk_size)
-        
+
     row = get_row(query)
     auto_increment_range_end = int(row['auto_increment_range_end'])
 
     return auto_increment_range_end
 
-    
+
 def copy_data_pass():
     if auto_increment_min_value is None:
         return
-    
+
     shared_columns_listing = ", ".join(shared_columns)
     auto_increment_range_start = auto_increment_min_value
     while auto_increment_range_start < auto_increment_max_value:
@@ -417,33 +418,33 @@ def copy_data_pass():
         engine_flags = ""
         if table_engine == "innodb":
             engine_flags = "LOCK IN SHARE MODE"
-            
+
         query = """
-            INSERT IGNORE INTO %s.%s (%s) 
+            INSERT IGNORE INTO %s.%s (%s)
                 (SELECT %s FROM %s.%s WHERE %s BETWEEN %d AND %d
                 %s)
-            """ % (database_name, ghost_table_name, shared_columns_listing, 
+            """ % (database_name, ghost_table_name, shared_columns_listing,
                 shared_columns_listing, database_name, original_table_name, auto_increment_column_name, auto_increment_range_start, auto_increment_range_end,
                 engine_flags)
         if options.lock_chunks:
             lock_tables_read()
-            
+
         verbose("Copying range (%d, %d), %d%% progress" % (auto_increment_range_start, auto_increment_range_end, progress))
         act_query(query)
 
         if options.lock_chunks:
             unlock_tables()
         auto_increment_range_start = auto_increment_range_end+1
-        
+
         if options.sleep_millis > 0:
             verbose("Will sleep for %f seconds" % (options.sleep_millis/1000.0))
             time.sleep(options.sleep_millis/1000.0)
 
-    
+
 def delete_data_pass():
     if auto_increment_min_value is None:
         return
-    
+
     shared_columns_listing = ", ".join(shared_columns)
     auto_increment_range_start = auto_increment_min_value
     while auto_increment_range_start < auto_increment_max_value:
@@ -454,11 +455,11 @@ def delete_data_pass():
             WHERE %s BETWEEN %d AND %d
             AND %s NOT IN
                 (SELECT %s FROM %s.%s WHERE %s BETWEEN %d AND %d)
-            """ % (database_name, ghost_table_name, 
+            """ % (database_name, ghost_table_name,
                 auto_increment_column_name, auto_increment_range_start, auto_increment_range_end,
                 auto_increment_column_name,
                 auto_increment_column_name, database_name, original_table_name, auto_increment_column_name, auto_increment_range_start, auto_increment_range_end)
-           
+
         verbose("Deleting range (%d, %d), %d%% progress" % (auto_increment_range_start, auto_increment_range_end, progress))
         act_query(query)
 
@@ -467,17 +468,17 @@ def delete_data_pass():
         if options.sleep_millis > 0:
             verbose("Will sleep for %f seconds" % (options.sleep_millis/1000.0))
             time.sleep(options.sleep_millis/1000.0)
-    
- 
+
+
 
 def rename_tables():
     """
     """
-    
+
     drop_table(archive_table_name)
     query = """
-        RENAME TABLE 
-            %s.%s TO %s.%s, 
+        RENAME TABLE
+            %s.%s TO %s.%s,
             %s.%s TO %s.%s
         """ % (database_name, original_table_name, database_name, archive_table_name,
                database_name, ghost_table_name, database_name, original_table_name, )
@@ -485,7 +486,7 @@ def rename_tables():
     verbose("Table %s.%s has been renamed to %s.%s" % (database_name, original_table_name, database_name, archive_table_name))
     verbose("Table %s.%s has been renamed to %s.%s" % (database_name, ghost_table_name, database_name, original_table_name))
 
-    
+
 try:
     try:
         conn = None
@@ -495,75 +496,80 @@ try:
         if not options.table:
             print_error("No table specified. Specify with -t or --table")
             exit(1)
-            
+
         if options.chunk_size <= 0:
             print_error("Chunk size must be nonnegative number. You can leave the default 1000 if unsure")
             exit(1)
 
         database_name = None
         original_table_name =  None
-        
+
         if options.database:
             database_name=options.database
-            
+
         table_tokens = options.table.split(".")
         original_table_name = table_tokens[-1]
         if len(table_tokens) == 2:
             database_name = table_tokens[0]
-            
+
         if not database_name:
             print_error("No database specified. Specify with fully qualified table name or with -d or --database")
             exit(1)
-        
+
         conn = open_connection()
-        
-        table_engine = get_table_engine()
-        if not table_engine:
-            print_error("Table %s.%s does not exist" % (database_name, original_table_name))
-            exit(1)
 
-        auto_increment_column_name = get_auto_increment_column(original_table_name)
-        if not auto_increment_column_name:
-            print_error("Table must have an AUTO_INCREMENT column")
-            exit(1)
-            
-        ghost_table_name  = "__oak_"+original_table_name
-        archive_table_name = "__arc_"+original_table_name
-        
-        drop_custom_triggers()
-        if not validate_no_triggers_exist():
-            print_error("Table must not have any 'AFTER' triggers defined.")
-            exit(1)
-            
-        create_ghost_table()
-        alter_ghost_table()
-        
-        ghost_auto_increment_column_name = get_auto_increment_column(ghost_table_name)
-        if not ghost_auto_increment_column_name:
+        if options.cleanup:
             drop_table(ghost_table_name)
-            print_error("Altered table must have an AUTO_INCREMENT column")
-            exit(1)
-        if ghost_auto_increment_column_name != auto_increment_column_name:
-            drop_table(ghost_table_name)
-            print_error("Altered table must not change the AUTO_INCREMENT column name")
-            exit(1)
+            drop_table(archive_table_name)
+            drop_custom_triggers()
+        else:
+            table_engine = get_table_engine()
+            if not table_engine:
+                print_error("Table %s.%s does not exist" % (database_name, original_table_name))
+                exit(1)
 
-        shared_columns = get_shared_columns()
-            
-        create_custom_triggers()
-        lock_tables_write()
-        #truncate_ghost_table()
-        auto_increment_min_value, auto_increment_max_value = get_auto_increment_range()
-        unlock_tables()
-        
-        reuse_conn = True
-        copy_data_pass()
-        delete_data_pass()
-        reuse_conn = False
-        
-        rename_tables()
+            auto_increment_column_name = get_auto_increment_column(original_table_name)
+            if not auto_increment_column_name:
+                print_error("Table must have an AUTO_INCREMENT column")
+                exit(1)
 
-        verbose("ALTER TABLE completed")
+            ghost_table_name  = "__oak_"+original_table_name
+            archive_table_name = "__arc_"+original_table_name
+
+            drop_custom_triggers()
+            if not validate_no_triggers_exist():
+                print_error("Table must not have any 'AFTER' triggers defined.")
+                exit(1)
+
+            create_ghost_table()
+            alter_ghost_table()
+
+            ghost_auto_increment_column_name = get_auto_increment_column(ghost_table_name)
+            if not ghost_auto_increment_column_name:
+                drop_table(ghost_table_name)
+                print_error("Altered table must have an AUTO_INCREMENT column")
+                exit(1)
+            if ghost_auto_increment_column_name != auto_increment_column_name:
+                drop_table(ghost_table_name)
+                print_error("Altered table must not change the AUTO_INCREMENT column name")
+                exit(1)
+
+            shared_columns = get_shared_columns()
+
+            create_custom_triggers()
+            lock_tables_write()
+            #truncate_ghost_table()
+            auto_increment_min_value, auto_increment_max_value = get_auto_increment_range()
+            unlock_tables()
+
+            reuse_conn = True
+            copy_data_pass()
+            delete_data_pass()
+            reuse_conn = False
+
+            rename_tables()
+
+            verbose("ALTER TABLE completed")
     except Exception, err:
         print err
 finally:
