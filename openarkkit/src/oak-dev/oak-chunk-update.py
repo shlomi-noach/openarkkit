@@ -41,8 +41,10 @@ def parse_options():
     parser.add_option("--print-only", action="store_true", dest="print_only", help="Do not execute. Only print statement")
     return parser.parse_args()
 
+
 def verbose(message):
-    print "-- %s" % message
+    if options.verbose:
+        print "-- %s" % message
 
 def print_error(message):
     print "-- ERROR: %s" % message
@@ -60,164 +62,214 @@ def open_connection():
             user = options.user,
             passwd = password,
             port = options.port,
+            db = database_name,
             unix_socket = options.socket)
     return conn;
 
-def act_final_query(query, should_sleep, num_remaining_values):
+
+def act_query(query):
     """
-    Either print or execute the given query
+    Run the given query, commit changes
     """
-    if options.print_only:
-        print query
+    if reuse_conn:
+        connection = conn
     else:
-        update_cursor = conn.cursor()
-        try:
-            try:
-                update_cursor.execute(query)
-                verbose("%d distinct invalid values remaining" % num_remaining_values)
-                if should_sleep:
-                    time.sleep(options.sleep_millis/1000.0)
-            except:
-                print_error("error executing: %s" % query)
-        finally:
-            update_cursor.close()
+        connection = open_connection()
+    cursor = connection.cursor()
+    #print query
+    cursor.execute(query)
+    cursor.close()
+    connection.commit()
+    if not reuse_conn:
+        connection.close()
 
 
-def get_column_property(full_column, property):
-    """
-    Given a fully qualified column name, get the given property from INFORMATION_SCHEMA.COLUMNS
-    """
-    column_qualification = full_column.split(".")
-
-    cursor = conn.cursor(MySQLdb.cursors.DictCursor)
-    cursor.execute("SELECT %s FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='%s' AND TABLE_NAME='%s' AND COLUMN_NAME='%s'" % tuple([property] + column_qualification))
+def get_row(query):
+    if reuse_conn:
+        connection = conn
+    else:
+        connection = open_connection()
+    cursor = connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute(query)
     row = cursor.fetchone()
 
-    property_value = row[property]
     cursor.close()
+    if not reuse_conn:
+        connection.close()
+    return row
 
-    return property_value
 
-def force_ri(conn):
-    """
-    Do the main work
-    """
-    parent_table = ".".join(options.parent_column.split(".")[:-1])
-    child_table = ".".join(options.child_column.split(".")[:-1])
-
-    cursor = conn.cursor()
-    query = "SELECT DISTINCT %s FROM %s WHERE %s NOT IN (SELECT %s FROM %s)" % (options.child_column, child_table, options.child_column, options.parent_column, parent_table )
-
+def get_rows(query):
+    if reuse_conn:
+        connection = conn
+    else:
+        connection = open_connection()
+    cursor = connection.cursor(MySQLdb.cursors.DictCursor)
     cursor.execute(query)
-    result_set = cursor.fetchall()
-    invalid_values = [row[0] for row in result_set]
-    cursor.close()
+    rows = cursor.fetchall()
 
-    if not invalid_values:
-        verbose("No invalid values found. Will do nothing")
+    cursor.close()
+    if not reuse_conn:
+        connection.close()
+    return rows
+
+
+def get_auto_increment_column():
+    """
+    Return the column name (lower case) of the AUTO_INCREMENT column in the given table,
+    or None if no such column is found.
+    """
+    auto_increment_column_name = None
+
+    query = """
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA='%s'
+            AND TABLE_NAME='%s'
+            AND LOCATE('auto_increment', EXTRA) > 0
+        """ % (database_name, table_name)
+    row = get_row(query)
+
+    if row:
+        auto_increment_column_name = row['COLUMN_NAME'].lower()
+    verbose("%s.%s AUTO_INCREMENT column is %s" % (database_name, table_name, auto_increment_column_name))
+
+    return auto_increment_column_name
+
+
+def table_exists(check_table_name):
+    """
+    See if the a given table exists:
+    """
+    count = 0
+
+    query = """
+        SELECT COUNT(*) AS count
+        FROM INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_SCHEMA='%s'
+            AND TABLE_NAME='%s'
+        """ % (database_name, check_table_name)
+
+    row = get_row(query)
+    count = int(row['count'])
+
+    return count
+
+
+def get_auto_increment_range():
+    """
+    Return the MIN and MAX values for the AUTO INCREMENT column in the original table
+    """
+    query = """
+        SELECT
+          IFNULL(MIN(%s),0) AS auto_increment_min_value,
+          IFNULL(MAX(%s),0) AS auto_increment_max_value
+        FROM %s.%s
+        """ % (auto_increment_column_name, auto_increment_column_name,
+               database_name, table_name)
+    row = get_row(query)
+    auto_increment_min_value = int(row['auto_increment_min_value'])
+    auto_increment_max_value = int(row['auto_increment_max_value'])
+    verbose("%s (min, max) values: (%d, %d)" % (auto_increment_column_name, auto_increment_min_value, auto_increment_max_value))
+
+    return auto_increment_min_value, auto_increment_max_value
+
+
+def get_auto_increment_range_end(auto_increment_range_start):
+    query = """
+        SELECT MAX(%s) AS auto_increment_range_end
+        FROM (SELECT %s FROM %s.%s
+          WHERE %s >= %d
+          AND %s <= %d
+          ORDER BY %s LIMIT %d) SEL1
+        """ % (auto_increment_column_name,
+               auto_increment_column_name, database_name, table_name,
+               auto_increment_column_name, auto_increment_range_start,
+               auto_increment_column_name, auto_increment_max_value,
+               auto_increment_column_name, options.chunk_size)
+
+    row = get_row(query)
+    auto_increment_range_end = int(row['auto_increment_range_end'])
+
+    return auto_increment_range_end
+
+
+def chunk_update():
+    if auto_increment_min_value is None:
         return
 
-    # See if this a text column; if so, enclose with quotes.
-    character_set_name = get_column_property(options.child_column, 'CHARACTER_SET_NAME')
-    if character_set_name:
-        verbose("child column is textual")
-        invalid_values = ["'"+value+"'" for value in invalid_values]
+    auto_increment_range_start = auto_increment_min_value
+    while auto_increment_range_start < auto_increment_max_value:
+        auto_increment_range_end = get_auto_increment_range_end(auto_increment_range_start)
+        progress = int(100.0*(auto_increment_range_start-auto_increment_min_value)/(auto_increment_max_value-auto_increment_min_value))
 
-    if options.chunk_size == 0:
-        options.chunk_size = len(invalid_values)
+        between_statement = "%s.%s BETWEEN %d AND %d" % (table_name, auto_increment_column_name, auto_increment_range_start, auto_increment_range_end)
+        query = "%s %s %s" % (options.execute_query[:match.start()], between_statement, options.execute_query[match.end():])
 
-    verbose("Found %d distinct invalid values. Will handle in chunks of %d" % (len(invalid_values), options.chunk_size))
+        verbose("Updating range (%d, %d), %d%% progress" % (auto_increment_range_start, auto_increment_range_end, progress))
+        act_query(query)
 
-    while invalid_values:
-        # slice up next chunk:
-        chunk = invalid_values[0:options.chunk_size]
-        # slice out chunk:
-        invalid_values = invalid_values[options.chunk_size:]
-        if options.action == "delete":
-            query = "DELETE FROM %s WHERE %s IN " % (child_table, options.child_column)
-        elif options.action == "setnull":
-            query = "UPDATE %s SET %s = NULL WHERE %s IN " % (child_table, options.child_column, options.child_column)
-        query += "(" + ",".join(chunk)+")"
-        act_final_query(query, options.sleep_millis and invalid_values, len(invalid_values))
+        auto_increment_range_start = auto_increment_range_end+1
+
+        if options.sleep_millis > 0:
+            verbose("Will sleep for %f seconds" % (options.sleep_millis/1000.0))
+            time.sleep(options.sleep_millis/1000.0)
+
+
 
 try:
     try:
         conn = None
+        reuse_conn = True
         (options, args) = parse_options()
+
+        if options.chunk_size <= 0:
+            print_error("Chunk size must be nonnegative number. You can leave the default 1000 if unsure")
+            exit(1)
 
         if not options.execute_query:
             print_error("Query to execute must be provided via -e or --execute")
             exit(1)
 
-        match = re.search('OAK_CHUNK\((.*?)\)', options.execute_query)
+        match_regexp = "OAK_CHUNK[\\s]*\((.*?)\)"
+        match = re.search(match_regexp, options.execute_query)
         if not match:
             print_error("Query must include the following token: 'OAK_CHUNK(table_name)', where table_name should be replaced with a table which consists of an AUTO_INCREMENT column by which chunks are made.")
             exit(1)
 
-        table_name = match.group(1)
-        print table_name
+        table_name_match = match.group(1).strip()
 
-        parent_column_tokens = options.parent_column.split(".")
-        if len(parent_column_tokens) != 3:
-            print_error("parent column must in the following format: schema_name.table_name.column_name")
-            exit(1)
-        child_column_tokens = options.child_column.split(".")
-        if len(child_column_tokens) != 3:
-            print_error("child column must in the following format: schema_name.table_name.column_name")
-            exit(1)
-        options.action = options.action.lower()
-        if not options.action in ("delete", "setnull"):
-            print_error("action must be either 'delete' or 'setnull'")
-            exit(1)
+        database_name = None
+        table_name =  None
 
-        safety_levels = {}
-        safety_levels['none'] = 0
-        safety_levels['normal'] = 1
-        safety_levels['high'] = 2
+        if options.database:
+            database_name=options.database
 
-        options.safety_level = options.safety_level.lower()
-        if not options.safety_level in safety_levels.keys():
-            print_error("safety-level must be one of 'none', 'normal', 'high'")
+        table_tokens = table_name_match.split(".")
+        table_name = table_tokens[-1]
+        if len(table_tokens) == 2:
+            database_name = table_tokens[0]
+
+        if not database_name:
+            print_error("No database specified. Specify with fully qualified table name insode OAK_CHUNK(...) or with -d or --database")
             exit(1)
-        options.sleep_millis = max(0, options.sleep_millis)
 
         conn = open_connection()
 
-        is_nullable = (get_column_property(options.child_column, 'IS_NULLABLE') == 'YES')
-        if options.action == "setnull" and not is_nullable:
-            print_error("Column %s is not nullable. Cannot use 'setnull' action." % options.child_column)
+        if not table_exists(table_name):
+            print_error("Table %s.%s does not exist" % (database_name, table_name))
             exit(1)
 
-        # Perform safety checks:
-        safety_errors = []
-        if safety_levels[options.safety_level] >= safety_levels['normal']:
-            # We compare data types. Character types must be identical down to length level.
-            # other type's precision is not validated (int(11) is the same as int(2))
-            parent_data_type = get_column_property(options.parent_column, "DATA_TYPE")
-            child_data_type = get_column_property(options.child_column, "DATA_TYPE")
-            if parent_data_type != child_data_type:
-                safety_errors.append("safety-level 'normal' error: parent and child column data types are not identical: %s, %s" % (parent_data_type, child_data_type))
-            else:
-                if parent_data_type in ['char', 'varchar']:
-                    parent_column_type = get_column_property(options.parent_column, "COLUMN_TYPE")
-                    child_column_type = get_column_property(options.child_column, "COLUMN_TYPE")
-                    if parent_column_type != child_column_type:
-                        safety_errors.append("safety-level 'normal' error: parent and child character column types are not identical: %s, %s. Specify a lower safety-level to override." % (parent_column_type, child_column_type))
-
-        if safety_levels[options.safety_level] >= safety_levels['high']:
-            # We compare column names: they must be identical
-            parent_column_name = parent_column_tokens[-1]
-            child_column_name = child_column_tokens[-1]
-            if parent_column_name != child_column_name:
-                safety_errors.append("safety-level 'high' error: parent and child column names are not identical: %s, %s. Specify a lower safety-level to override." % (parent_column_name, child_column_name))
-
-        if safety_errors:
-            for error in safety_errors:
-                print_error(error)
+        auto_increment_column_name = get_auto_increment_column()
+        if not auto_increment_column_name:
+            print_error("Table must have an AUTO_INCREMENT column")
             exit(1)
 
-        force_ri(conn)
+        auto_increment_min_value, auto_increment_max_value = get_auto_increment_range()
 
+        chunk_update()
+
+        verbose("Chunk update completed")
     except Exception, err:
         print err
 finally:

@@ -64,6 +64,7 @@ def open_connection():
             user = options.user,
             passwd = password,
             port = options.port,
+            db = database_name,
             unix_socket = options.socket)
     return conn;
 
@@ -491,7 +492,7 @@ def rename_tables():
 try:
     try:
         conn = None
-        reuse_conn = False
+        reuse_conn = True
         (options, args) = parse_options()
 
         if not options.table:
@@ -571,10 +572,8 @@ try:
             auto_increment_min_value, auto_increment_max_value = get_auto_increment_range()
             unlock_tables()
 
-            reuse_conn = True
             copy_data_pass()
             delete_data_pass()
-            reuse_conn = False
 
             if options.ghost:
                 verbose("Ghost table creation completed. Note that triggers on %s.%s were not removed" % (database_name, original_table_name))
