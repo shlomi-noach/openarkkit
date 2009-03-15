@@ -55,12 +55,15 @@ def open_connection():
             unix_socket = options.socket)
     return conn;
 
+
 def verbose(message):
     if options.verbose:
         print "-- %s" % message
 
+
 def print_error(message):
     print "-- ERROR: %s" % message
+
 
 def get_blocked_accounts_processes_ids():
     """
@@ -84,6 +87,7 @@ def get_blocked_accounts_processes_ids():
             cursor.close()
     return blocked_accounts_processes_ids
 
+
 def kill_blocked_accounts_processes(conn):
     """
     Kill the connections for the blocked account(s)
@@ -95,6 +99,15 @@ def kill_blocked_accounts_processes(conn):
         query = "KILL %d" % process_id
         act_final_query(query)
 
+
+def is_empty_password(password):
+    """
+    Just check for length
+    """
+    return len(password) == 0 or password == "?"*41
+
+
+
 def is_new_password(password):
     """
     MySQL's new passwords are indicated by a 40 characters long text, prefixed by '*',
@@ -102,8 +115,12 @@ def is_new_password(password):
     """
     return len(password) == 41 and not '~' in password
 
+
 def blocked_password(password):
-    if is_new_password(password):
+    if is_empty_password(password):
+        if len(password) ==0:
+            return "?"*41
+    elif is_new_password(password):
         if password.startswith("*"):
             return password[::-1]
     else:
@@ -111,14 +128,19 @@ def blocked_password(password):
             return "~"*25+password
     return None
 
+
 def released_password(password):
-    if is_new_password(password):
+    if is_empty_password(password):
+        if password.startswith("?"):
+            return ""
+    elif is_new_password(password):
         if password.endswith("*"):
             return password[::-1]
     else:
         if password.startswith("~"):
             return password[25:]
     return None
+
 
 def act_final_query(query, message):
     """
@@ -155,22 +177,25 @@ def block_account(conn):
             password = row['password']
             new_password = None
 
-            if is_new_password(password):
-                password_format = "new"
+            if is_empty_password(password):
+                verbose("password for '%s'@'%s' is empty" % (user, host))
             else:
-                password_format = "old"
-            verbose("password for '%s'@'%s' is in %s format" % (user, host, password_format))
+                if is_new_password(password):
+                    password_format = "new"
+                else:
+                    password_format = "old"
+                verbose("password for '%s'@'%s' is in %s format" % (user, host, password_format))
 
             if options.block:
                 new_password = blocked_password(password)
-                if not new_password:
+                if new_password is None:
                     print_error("Account is already blocked")
             if options.release:
                 new_password = released_password(password)
-                if not new_password:
+                if new_password is None:
                     print_error("Account is already released")
 
-            if new_password:
+            if new_password is not None:
                 update_query = "SET PASSWORD FOR '%s'@'%s' = '%s'" % (user, host, new_password)
                 act_final_query(update_query, "Successfuly updated password")
         except Exception, err:
