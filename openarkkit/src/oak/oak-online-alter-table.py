@@ -40,7 +40,8 @@ def parse_options():
     parser.add_option("-l", "--lock-chunks", action="store_true", dest="lock_chunks", default=False, help="User LOCK TABLES for each chunk")
     parser.add_option("--sleep", dest="sleep_millis", type="int", default=0, help="Number of milliseconds to sleep between chunks. Default: 0")
     parser.add_option("--cleanup", dest="cleanup", action="store_true", default=False, help="Print user friendly messages")
-    parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
+    parser.add_option("-v", "--verbose", dest="verbose", action="store_true", default=True, help="Print user friendly messages")
+    parser.add_option("-q", "--quiet", dest="verbose", action="store_false", help="Quiet mode, do not verbose")
     parser.add_option("--print-only", dest="print_only", action="store_true", help="Do not execute. Only print statement")
     return parser.parse_args()
 
@@ -485,8 +486,8 @@ def rename_tables():
         """ % (database_name, original_table_name, database_name, archive_table_name,
                database_name, ghost_table_name, database_name, original_table_name, )
     act_query(query)
-    verbose("Table %s.%s has been renamed to %s.%s" % (database_name, original_table_name, database_name, archive_table_name))
-    verbose("Table %s.%s has been renamed to %s.%s" % (database_name, ghost_table_name, database_name, original_table_name))
+    verbose("Table %s.%s has been renamed to %s.%s," % (database_name, original_table_name, database_name, archive_table_name))
+    verbose("and table %s.%s has been renamed to %s.%s" % (database_name, ghost_table_name, database_name, original_table_name))
 
 
 try:
