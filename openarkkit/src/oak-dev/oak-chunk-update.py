@@ -35,7 +35,9 @@ def parse_options():
     parser.add_option("-d", "--database", dest="database", help="Database name (required unless query uses fully qualified table names)")
     parser.add_option("-e", "--execute", dest="execute_query", help="Query (UPDATE or DELETE) to execute, which contains a chunk placeholder (required)")
     parser.add_option("-t", "--table", dest="table", help="Table with AUTO_INCREMENT column by which to chunk")
-    parser.add_option("-c", "--chunk-size", dest="chunk_size", type="int", default=0, help="Number of rows to act on in chunks (default: 0; all rows updated in one operation")
+    parser.add_option("-c", "--chunk-size", dest="chunk_size", type="int", default=1000, help="Number of rows to act on in chunks (default: 1000). 0 means all rows updated in one operation")
+    parser.add_option("--start-with", dest="start_with", type="int", default=None, help="AUTO_INCREMENT value to start with (default: minimal in table)")
+    parser.add_option("--end-with", dest="end_with", type="int", default=None, help="AUTO_INCREMENT value to end with (default: maximal in table)")
     parser.add_option("--sleep", dest="sleep_millis", type="int", default=0, help="Number of milliseconds to sleep between chunks. Default: 0")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     parser.add_option("--print-only", action="store_true", dest="print_only", help="Do not execute. Only print statement")
@@ -170,7 +172,6 @@ def get_auto_increment_range():
     row = get_row(query)
     auto_increment_min_value = int(row['auto_increment_min_value'])
     auto_increment_max_value = int(row['auto_increment_max_value'])
-    verbose("%s (min, max) values: (%d, %d)" % (auto_increment_column_name, auto_increment_min_value, auto_increment_max_value))
 
     return auto_increment_min_value, auto_increment_max_value
 
@@ -203,7 +204,7 @@ def chunk_update():
         auto_increment_range_end = get_auto_increment_range_end(auto_increment_range_start)
         progress = int(100.0*(auto_increment_range_start-auto_increment_min_value)/(auto_increment_max_value-auto_increment_min_value))
 
-        between_statement = "%s.%s BETWEEN %d AND %d" % (table_name, auto_increment_column_name, auto_increment_range_start, auto_increment_range_end)
+        between_statement = "%s.%s.%s BETWEEN %d AND %d" % (database_name, table_name, auto_increment_column_name, auto_increment_range_start, auto_increment_range_end)
         query = "%s %s %s" % (options.execute_query[:match.start()], between_statement, options.execute_query[match.end():])
 
         verbose("Updating range (%d, %d), %d%% progress" % (auto_increment_range_start, auto_increment_range_end, progress))
@@ -223,7 +224,7 @@ try:
         reuse_conn = True
         (options, args) = parse_options()
 
-        if options.chunk_size <= 0:
+        if options.chunk_size < 0:
             print_error("Chunk size must be nonnegative number. You can leave the default 1000 if unsure")
             exit(1)
 
@@ -266,6 +267,11 @@ try:
             exit(1)
 
         auto_increment_min_value, auto_increment_max_value = get_auto_increment_range()
+        if options.start_with is not None:
+            auto_increment_min_value = options.start_with
+        if options.end_with is not None:
+            auto_increment_max_value = options.end_with
+        verbose("Will update range: (%d, %d)" % (auto_increment_min_value, auto_increment_max_value))
 
         chunk_update()
 
