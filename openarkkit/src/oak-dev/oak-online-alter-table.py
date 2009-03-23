@@ -408,10 +408,10 @@ def create_custom_triggers():
     Create the three 'AFTER' triggers on the original table
     """
     query = """
-        CREATE TRIGGER %s.%s_AD_oak AFTER DELETE ON %s.%s
+        CREATE TRIGGER %s.%s AFTER DELETE ON %s.%s
         FOR EACH ROW
             DELETE FROM %s.%s WHERE %s = OLD.%s;
-        """ % (database_name, original_table_name, database_name, original_table_name,
+        """ % (database_name, after_delete_trigger_name, database_name, original_table_name,
                database_name, ghost_table_name, unique_key_column_name, unique_key_column_name)
     act_query(query)
     verbose("Created AD trigger")
@@ -420,48 +420,59 @@ def create_custom_triggers():
     shared_columns_new_listing = ", ".join(["NEW.%s" % column_name for column_name in shared_columns])
 
     query = """
-        CREATE TRIGGER %s.%s_AU_oak AFTER UPDATE ON %s.%s
+        CREATE TRIGGER %s.%s AFTER UPDATE ON %s.%s
         FOR EACH ROW
             REPLACE INTO %s.%s (%s) VALUES (%s);
-        """ % (database_name, original_table_name, database_name, original_table_name,
+        """ % (database_name, after_update_trigger_name, database_name, original_table_name,
                database_name, ghost_table_name, shared_columns_listing, shared_columns_new_listing)
     act_query(query)
     verbose("Created AU trigger")
 
     query = """
-        CREATE TRIGGER %s.%s_AI_oak AFTER INSERT ON %s.%s
+        CREATE TRIGGER %s.%s AFTER INSERT ON %s.%s
         FOR EACH ROW
             REPLACE INTO %s.%s (%s) VALUES (%s);
-        """ % (database_name, original_table_name, database_name, original_table_name,
+        """ % (database_name, after_insert_trigger_name, database_name, original_table_name,
                database_name, ghost_table_name, shared_columns_listing, shared_columns_new_listing)
     act_query(query)
     verbose("Created AI trigger")
+
+
+def trigger_exists(trigger_name):
+    """
+    See if the given trigger exists on the original table
+    """
+
+    query = """
+        SELECT COUNT(*) AS count
+        FROM INFORMATION_SCHEMA.TRIGGERS
+        WHERE TRIGGER_SCHEMA='%s'
+            AND EVENT_OBJECT_TABLE='%s'
+            AND TRIGGER_NAME='%s'
+        """ % (database_name, original_table_name, trigger_name)
+
+    row = get_row(query)
+    count = int(row['count'])
+
+    return count
+
+
+def drop_custom_trigger(trigger_name):
+    if trigger_exists(trigger_name):
+        query = """
+            DROP TRIGGER IF EXISTS %s.%s
+            """ % (database_name, trigger_name)
+        act_query(query)
+        verbose("Dropped custom trigger %s" % trigger_name)
 
 
 def drop_custom_triggers():
     """
     Cleanup
     """
-    try:
-        query = """
-            DROP TRIGGER IF EXISTS %s.%s_AD_oak
-            """ % (database_name, original_table_name)
-        act_query(query)
-        verbose("Dropped custom AD trigger")
-
-        query = """
-            DROP TRIGGER IF EXISTS %s.%s_AI_oak
-            """ % (database_name, original_table_name)
-        act_query(query)
-        verbose("Dropped custom AI trigger")
-
-        query = """
-            DROP TRIGGER IF EXISTS %s.%s_AU_oak
-            """ % (database_name, original_table_name)
-        act_query(query)
-        verbose("Dropped custom AU trigger")
-    except:
-        pass
+    drop_custom_trigger(after_delete_trigger_name)
+    drop_custom_trigger(after_update_trigger_name)
+    drop_custom_trigger(after_insert_trigger_name)
 
 
 def get_unique_key_range():
@@ -657,6 +668,8 @@ try:
             print_error("No database specified. Specify with fully qualified table name or with -d or --database")
             exit(1)
 
+        conn = open_connection()
+
         if options.ghost:
             if table_exists(options.ghost):
                 print_error("Ghost table: %s.%s already exists." % (database_name, options.ghost))
@@ -668,9 +681,12 @@ try:
             ghost_table_name = "__oak_"+original_table_name
         archive_table_name = "__arc_"+original_table_name
 
-        conn = open_connection()
+        after_delete_trigger_name = "%s_AD_oak" % original_table_name
+        after_update_trigger_name = "%s_AU_oak" % original_table_name
+        after_insert_trigger_name = "%s_AI_oak" % original_table_name
 
         if options.cleanup:
+            # All we do now is clean up
             drop_table(ghost_table_name)
             drop_table(archive_table_name)
             drop_custom_triggers()
