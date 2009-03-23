@@ -519,6 +519,8 @@ try:
             print_error("No database specified. Specify with fully qualified table name or with -d or --database")
             exit(1)
 
+        conn = open_connection()
+
         if options.ghost:
             if table_exists(options.ghost):
                 print_error("Ghost table: %s.%s already exists." % (database_name, options.ghost))
@@ -529,8 +531,6 @@ try:
         else:
             ghost_table_name = "__oak_"+original_table_name
         archive_table_name = "__arc_"+original_table_name
-
-        conn = open_connection()
 
         if options.cleanup:
             drop_table(ghost_table_name)
