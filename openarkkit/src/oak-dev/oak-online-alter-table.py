@@ -33,16 +33,15 @@ def parse_options():
     parser.add_option("-S", "--socket", dest="socket", default="/var/run/mysqld/mysql.sock", help="MySQL socket file. Only applies when host is localhost")
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
     parser.add_option("-d", "--database", dest="database", help="Database name (required unless table is fully qualified)")
-    parser.add_option("-t", "--table", dest="table", help="Table with AUTO_INCREMENT column to alter (optionally fully qualified)")
+    parser.add_option("-t", "--table", dest="table", help="Table to alter (optionally fully qualified)")
     parser.add_option("-g", "--ghost", dest="ghost", help="Table name to serve as ghost. This table will be created and synchronized with the original table")
     parser.add_option("-a", "--alter", dest="alter_statement", help="Comma delimited ALTER statement details, excluding the 'ALTER TABLE t' itself")
     parser.add_option("-c", "--chunk-size", dest="chunk_size", type="int", default=1000, help="Number of rows to act on in chunks. Default: 1000")
-    parser.add_option("-l", "--lock-chunks", action="store_true", dest="lock_chunks", default=False, help="User LOCK TABLES for each chunk")
+    parser.add_option("-l", "--lock-chunks", action="store_true", dest="lock_chunks", default=False, help="Use LOCK TABLES for each chunk")
     parser.add_option("--sleep", dest="sleep_millis", type="int", default=0, help="Number of milliseconds to sleep between chunks. Default: 0")
-    parser.add_option("--cleanup", dest="cleanup", action="store_true", default=False, help="Print user friendly messages")
+    parser.add_option("--cleanup", dest="cleanup", action="store_true", default=False, help="Remove custom triggers, ghost table from possible previous runs")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", default=True, help="Print user friendly messages")
     parser.add_option("-q", "--quiet", dest="verbose", action="store_false", help="Quiet mode, do not verbose")
-    parser.add_option("--print-only", dest="print_only", action="store_true", help="Do not execute. Only print statement")
     return parser.parse_args()
 
 def verbose(message):
@@ -639,6 +638,26 @@ def rename_tables():
     verbose("and table %s.%s has been renamed to %s.%s" % (database_name, ghost_table_name, database_name, original_table_name))
 
 
+def cleanup():
+    """
+    Remove any data this utility may have created during this runtime or previous runtime.
+    """
+    if conn:
+        drop_table(ghost_table_name)
+        drop_table(archive_table_name)
+        drop_custom_triggers()
+    
+    
+def exit_with_error(error_message):
+    """
+    Notify, cleanup and exit.
+    """
+    print_error("Errors found. Initiating cleanup")
+    cleanup()
+    print_error(error_message)
+    exit(1)
+    
+    
 try:
     try:
         conn = None
@@ -646,13 +665,11 @@ try:
         (options, args) = parse_options()
 
         if not options.table:
-            print_error("No table specified. Specify with -t or --table")
-            exit(1)
-
+            exit_with_error("No table specified. Specify with -t or --table")
+ 
         if options.chunk_size <= 0:
-            print_error("Chunk size must be nonnegative number. You can leave the default 1000 if unsure")
-            exit(1)
-
+            exit_with_error("Chunk size must be nonnegative number. You can leave the default 1000 if unsure")
+ 
         database_name = None
         original_table_name =  None
 
@@ -665,15 +682,13 @@ try:
             database_name = table_tokens[0]
 
         if not database_name:
-            print_error("No database specified. Specify with fully qualified table name or with -d or --database")
-            exit(1)
+            exit_with_error("No database specified. Specify with fully qualified table name or with -d or --database")
 
         conn = open_connection()
 
         if options.ghost:
             if table_exists(options.ghost):
-                print_error("Ghost table: %s.%s already exists." % (database_name, options.ghost))
-                exit(1)
+                exit_with_error("Ghost table: %s.%s already exists." % (database_name, options.ghost))
 
         if options.ghost:
             ghost_table_name = options.ghost
@@ -687,24 +702,19 @@ try:
 
         if options.cleanup:
             # All we do now is clean up
-            drop_table(ghost_table_name)
-            drop_table(archive_table_name)
-            drop_custom_triggers()
+            cleanup()
         else:
             table_engine = get_table_engine()
             if not table_engine:
-                print_error("Table %s.%s does not exist" % (database_name, original_table_name))
-                exit(1)
+                exit_with_error("Table %s.%s does not exist" % (database_name, original_table_name))
 
             drop_custom_triggers()
             if not validate_no_triggers_exist():
-                print_error("Table must not have any 'AFTER' triggers defined.")
-                exit(1)
+                exit_with_error("Table must not have any 'AFTER' triggers defined.")
 
             original_table_unique_key_names = get_possible_unique_key_column_names(original_table_name)
             if not original_table_unique_key_names:
-                print_error("Table must have a UNIQUE KEY on a single column")
-                exit(1)
+                exit_with_error("Table must have a UNIQUE KEY on a single column")
 
             create_ghost_table()
             alter_ghost_table()
@@ -712,15 +722,13 @@ try:
             ghost_table_unique_key_names = get_possible_unique_key_column_names(ghost_table_name)
             if not original_table_unique_key_names:
                 drop_table(ghost_table_name)
-                print_error("Aletered table must have a UNIQUE KEY on a single column")
-                exit(1)
+                exit_with_error("Aletered table must have a UNIQUE KEY on a single column")
 
             shared_unique_key_column_names = original_table_unique_key_names.intersection(ghost_table_unique_key_names)
 
             if not shared_unique_key_column_names:
                 drop_table(ghost_table_name)
-                print_error("Altered table must retain at least one unique key")
-                exit(1)
+                exit_with_error("Altered table must retain at least one unique key")
 
             unique_key_column_name, unique_key_type = get_shared_unique_key_column(shared_unique_key_column_names)
 
@@ -741,7 +749,7 @@ try:
                 drop_table(archive_table_name)
                 verbose("ALTER TABLE completed")
     except Exception, err:
-        print err
+        exit_with_error(err)
 finally:
     if conn:
         conn.close()
