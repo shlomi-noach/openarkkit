@@ -8,7 +8,7 @@ Same as above, specify database with table name:
 Perform multiple alters:
 <blockquote>oak-online-alter-table --table=world.City --alter="ADD KEY(Population), MODIFY Name VARCHAR(64) CHARSET utf8 NOT NULL"</blockquote>
 Add column, drop column, modify AUTO_INCREMENT:
-<blockquote>oak-online-alter-table --table=world.City --alter="ADD COLUMN Mayor VARCHAR(64) CHARSET utf8 DEFAULT '', DROP COLUMN district, MODIFY id SMALLINT AUTO_INCREMENT PRIMARY KEY"</blockquote>
+<blockquote>oak-online-alter-table --table=world.City --alter="ADD COLUMN Mayor VARCHAR(64) CHARSET utf8 DEFAULT '', DROP COLUMN district, MODIFY id SMALLINT AUTO_INCREMENT"</blockquote>
 Do not ALTER, just rebuild City:
 <blockquote>oak-online-alter-table --database=world --table=City</blockquote>
 Create a ghost table called City_mirror, which is updated online from City table:
@@ -24,37 +24,68 @@ Provide connection parameters. Prompt for password:
 Use a defaults file for connection parameters:
 <blockquote>oak-online-alter-table --database=world --table=City --alter="ADD KEY(Population)" --defaults-file=/home/myuser/.my-oak.cnf</blockquote>
 <h3>DESCRIPTION</h3>
-This tool can be used when you are not using Foreign Keys (either not using a storage engine with supports foreign keys, aush as InnoDB, or not using referencial integrity in your schema), but would like to ensure that Foreign Key contraints apply on your database. With this tool you may perform the following:
-<ul>
-	<li>Delete "orphaned" rows (as in ON DELETE CASCADE)</li>
-	<li>Set "orphaned" rows reference to NULL (as in ON DELETE SET NULL)</li>
-	<li>Print our whatever need to done without executing</li>
-	<li>Evaluate if adding a Foreign Key contraint is possible</li>
-</ul>
-oak-apply-ri works with varying safety levels. Each safety level adds sanity checks to the previous one:
-<ul>
-	<li>None: does not perform checks</li>
-	<li>Normal: validates that both columns are of the same data type</li>
-	<li>High: validates that both columns have the same name.</li>
-</ul>
-Actual delete or update can be a lengthy operation, and may lock the child table. oak-apply-ri can work in specified chunk size, and with a configurable delay between chunk operations.
+oak-online-alter-table allows for non blocking ALTER TABLE operations, table rebuilds and creating a table's ghost.
 
-Integrity can be applied for columns of different schemas.
+To run this utility, the following requirements must be met:
+<ul>
+	<li>The table has at least one single-column UNIQUE KEY<em></em></li>
+	<li>Altered table shares a single-column UNIQUE KEY with the original table<em></em></li>
+	<li>No ‘AFTER’ triggers are defined on the table (the utility creates its own triggers for the duration of the operation)</li>
+	<li>The table has no FOREIGN KEYs<em></em></li>
+	<li>Table name is no longer than 57 characters</li>
+</ul>
+The utility provides with three basic functionalities:
+<ul>
+	<li>A non blocking ALTER TABLE operation: adding columns or keys, dropping columns or keys, modifying columns, converting table character set etc., are all supported, under the following restrictions:
+<ul>
+	<li>ADD COLUMN (new column must have a default value)</li>
+	<li>DROP COLUMN (as long as there’s still a shared single-column UNIQUE KEY between the old table and the altered one)</li>
+	<li>MODIFY COLUMN (change type, including UNIQUE KEY columns)</li>
+	<li>ADD KEY (normal, unique, fulltext etc.)</li>
+	<li>DROP KEY (as long as there’s still a shared single-column UNIQUE KEY between the old table and the altered one)</li>
+	<li>Change ENGINE: works, but great care should be taken when dealing with non-transactional engines</li>
+	<li>Adding FOREIGN KEY constraints is possible</li>
+	<li>More… Not all ALTERS have been tested, e.g. CONVERT, partition handling…</li>
+</ul>
+</li>
+	<li>An empty ALTER, which rebuilds a table: potentially releasing disk space and organizing rows in a more optimized way on disk.</li>
+	<li>(May not be supported in future versions): Creating a live 'ghost' table, which is synchronized with the original table, as long as the following do not occur:
+<ul>
+	<li>An ALTER TABLE on the original table</li>
+	<li>A TRUNCATE on the original table</li>
+	<li>LOAD DATA INFILE into the original table</li>
+	<li>OPTIMIZE on the original table</li>
+</ul>
+</li>
+</ul>
+While the utility runs, it is allowed to invoke INSERT, UPDATE, DELETE, REPLACE on the original table. It is not allowed to TRUNCATE, ALTER, REPAIR, OPTIMIZE or otherwise perform a table-wide operation on the original table.
+
+The utility works with InnoDB tables, MyISAM tables, or otherwise any table-level locking storage engine (MEMORY, ARCHIVE). There is currently no support for PBXT or Falcon.
+
+The utility works by creating a ghost table for the duration of the runtime, which is slowly synchronized with the original table. When the synchronization is complete, it takes place of the original table. To do this, the utility must create AFTER INSERT, AFTER UPDATE, AFTER DELETE triggers on the original table.
+
+Synchronizing the ghost table with the original tables takes place in several steps. In one of those steps, data is copied from the original table to the ghost table. This is done in chunks of rows, the number of which is configurable using the <strong>chunk-size</strong> option. While a chunk is being copied, there is a read lock on the table (MyISAM, ARCHIVE, MEMORY) or on the rows contained in the chunk (InnoDB). The smaller the chunk - the faster the locks are removed, and the more concurrency is allowed; but also the longer it will take for the entire operation to complete.
+
+For write intensive application, it may be advisable to allow for pauses between chunks, so as to make as little impact as possible. This can be configured with the <strong>sleep</strong> option. While sleeping between chunks, no locks are placed.
+
+Even so, a performance impact is noticed while the application runs, and this is due to the triggers added on the table, and the propagation of DML statements to the ghost table.
+
+It is required to have enough disk space to accomodate the altered table (as in a normal ALTER TABLE). Only when the operation completes can there be a disk space regaining (depending on your storage engine and configuration).
 <h3>OPTIONS</h3>
--a ACTION, --action=ACTION
-<p style="padding-left: 30px;">Action to take on invalid (orphaned) rows. Can be either <span style="text-decoration: underline;">delete</span> or <span style="text-decoration: underline;">setnull.</span></p>
-<p style="padding-left: 30px;"><span style="text-decoration: underline;">delete</span> issues a DELETE on orphaned rows. <span style="text-decoration: underline;">setnull</span> issues an UPDATE on those rows, setting orphaned key to NULL.</p>
-<p style="padding-left: 30px;"><span style="text-decoration: underline;">setnull</span> is the default value. It is impossible to use 'setnull' for a NOT NULL child column.</p>
+-a ALTER_STATEMENT, --alter=ALTER_STATEMENT
+<p style="padding-left: 30px;">Comma delimited ALTER statement details, excluding the 'ALTER TABLE t' itself. When this options is not used, an 'empty' ALTER is performed, essentially rebuilding the table.</p>
 
 --ask-pass
 <p style="padding-left: 30px;">Prompt for password.</p>
 
---child=CHILD_COLUMN
-<p style="padding-left: 30px;">Fully qualified child (referencing) column. Must be in the following format: schema_name.table_name.column_name</p>
-
 -c CHUNK_SIZE, --chunk-size=CHUNK_SIZE
-<p style="padding-left: 30px;">Number of values to act on in chunks. This does not map directly to number of rows, but rather to number of distinct orphaned values.</p>
-<p style="padding-left: 30px;">Default chunk size is 0, which means all rows are deleted/updated in one operation</p>
+<p style="padding-left: 30px;">Number of rows to act on in chunks. Default: 1000. The lower the number, the shorter any locks are held, but the more operations required and the more total running time. Do not use very low values when the PRIMARY KEY, or otherwise the only UNIQUE KEY are on textual columns, as values from such keys are reused when working the chunks. If you're not sure - stick with the defaults.</p>
+
+--cleanup
+<p style="padding-left: 30px;">Remove custom triggers, ghost table from possible previous runs. In case a previous run was abruptly terminated, this option removes all custom data this utility may have created. It is not necessary to run with this option after a normal completion.</p>
+
+-d DATABASE, --database=DATABASE
+<p style="padding-left: 30px;">Database name (required unless table is fully qualified)</p>
 
 --defaults-file=DEFAULTS_FILE
 <p style="padding-left: 30px;">Read from MySQL configuration file. Overrides --user, --password, --socket, --port.</p>
@@ -66,17 +97,15 @@ password=my_pass
 socket=/tmp/mysql.sock
 port=3306</strong>
 
+-g GHOST, --ghost=GHOST
+<p style="padding-left: 30px;">Table name to serve as ghost. When this option is used, a table by this name is created and synchronized with the original table. The original table is thereafter unaltered, and the three AFTER INSERT, AFTER UPDATE and AFTER DELETE triggers are maintained. To perform an ALTER TABLE, do not use this option. <em>[May be removed in future versions]</em></p>
+
 -H HOST, --host=HOST
 <p style="padding-left: 30px;">MySQL host (default: localhost)</p>
 
--l SAFETY_LEVEL, --safety-level=SAFETY_LEVEL
-<p style="padding-left: 30px;">Level of tests to make in order for action to take place. Valid values are:</p>
-<p style="padding-left: 30px;"><span style="text-decoration: underline;">none</span>: no tests are performed</p>
-<p style="padding-left: 30px;"><span style="text-decoration: underline;">normal</span> (default): columns are tested to be of identical date type</p>
-<p style="padding-left: 30px;"><span style="text-decoration: underline;">high</span>: smae as 'normal' + columns are tested to be of identical names</p>
-
---parent=PARENT_COLUMN
-<p style="padding-left: 30px;">Fully qualified parent (referenced) column. Must be in the following format: schema_name.table_name.column_name</p>
+-l, --lock-chunks
+<p style="padding-left: 30px;">Use LOCK TABLES for each chunk. This option enforces a higher locking mechanism, and is at current available as preparation to be able to work with unsupported engines. It is not required nor advisable to use this option with MyISAM or InnoDB engines. <em>[May be removed in future versions].
+</em>
 
 -p PASSWORD, --password=PASSWORD
 <p style="padding-left: 30px;">MySQL password</p>
@@ -84,20 +113,23 @@ port=3306</strong>
 -P PORT, --port=PORT
 <p style="padding-left: 30px;">TCP/IP port (default: 3306)</p>
 
---print-only
-<p style="padding-left: 30px;">Do not execute. Only print statement</p>
+-q, --quiet
+<p style="padding-left: 30px;">Quiet mode, do not verbose. Verbose is on by default, use this option to turn it off.</p>
 
 --sleep=SLEEP_MILLIS
-<p style="padding-left: 30px;">Number of milliseconds to sleep between chunks. Default: 0</p>
+<p style="padding-left: 30px;">Number of milliseconds to sleep between chunks. Default: 0. Use a higher value if your system suffers from high load average. The higher the value, the more time the system is allowed to 'rest', but also the longer the runtime, and the more overhead (over time) from the triggers effect. You may also wish to set a higher number if slaves are finding it hard otherwise to catch up.</p>
 
 -S SOCKET, --socket=SOCKET
 <p style="padding-left: 30px;">MySQL socket file. Only applies when host is localhost</p>
+
+-t TABLE, --table=TABLE
+<p style="padding-left: 30px;">Table with AUTO_INCREMENT column to alter (optionally fully qualified as database_name.table_name, in which case --database is not required)</p>
 
 -u USER, --user=USER
 <p style="padding-left: 30px;">MySQL user</p>
 
 -v, --verbose
-<p style="padding-left: 30px;">Print user friendly messages</p>
+<p style="padding-left: 30px;">Print user friendly messages. Enabled by default.</p>
 
 <h3>ENVIRONMENT</h3>
 Requires MySQL 5.0 or newer, python 2.3 or newer.
