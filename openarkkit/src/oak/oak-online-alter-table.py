@@ -286,6 +286,9 @@ def table_exists(check_table_name):
     """
     See if the a given table exists:
     """
+    if not check_table_name:
+        return 0
+
     count = 0
 
     query = """
@@ -643,11 +646,12 @@ def cleanup():
     Remove any data this utility may have created during this runtime or previous runtime.
     """
     if conn:
-        drop_table(ghost_table_name)
+        if not options.ghost:
+            drop_table(ghost_table_name)
         drop_table(archive_table_name)
         drop_custom_triggers()
-    
-    
+
+
 def exit_with_error(error_message):
     """
     Notify, cleanup and exit.
@@ -656,8 +660,8 @@ def exit_with_error(error_message):
     cleanup()
     print_error(error_message)
     exit(1)
-    
-    
+
+
 try:
     try:
         conn = None
@@ -666,10 +670,10 @@ try:
 
         if not options.table:
             exit_with_error("No table specified. Specify with -t or --table")
- 
+
         if options.chunk_size <= 0:
             exit_with_error("Chunk size must be nonnegative number. You can leave the default 1000 if unsure")
- 
+
         database_name = None
         original_table_name =  None
 
@@ -686,6 +690,7 @@ try:
 
         conn = open_connection()
 
+        ghost_table_name = None
         if options.ghost:
             if table_exists(options.ghost):
                 exit_with_error("Ghost table: %s.%s already exists." % (database_name, options.ghost))
