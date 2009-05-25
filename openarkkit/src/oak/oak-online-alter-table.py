@@ -74,46 +74,31 @@ def act_query(query):
     """
     Run the given query, commit changes
     """
-    if reuse_conn:
-        connection = conn
-    else:
-        connection = open_connection()
+    connection = conn
     cursor = connection.cursor()
-    #print query
-    cursor.execute(query)
+    num_affected_rows = cursor.execute(query)
     cursor.close()
     connection.commit()
-    if not reuse_conn:
-        connection.close()
+    return num_affected_rows
 
 
 def get_row(query):
-    if reuse_conn:
-        connection = conn
-    else:
-        connection = open_connection()
+    connection = conn
     cursor = connection.cursor(MySQLdb.cursors.DictCursor)
     cursor.execute(query)
     row = cursor.fetchone()
 
     cursor.close()
-    if not reuse_conn:
-        connection.close()
     return row
 
 
 def get_rows(query):
-    if reuse_conn:
-        connection = conn
-    else:
-        connection = open_connection()
+    connection = conn
     cursor = connection.cursor(MySQLdb.cursors.DictCursor)
     cursor.execute(query)
     rows = cursor.fetchall()
 
     cursor.close()
-    if not reuse_conn:
-        connection.close()
     return rows
 
 
@@ -134,18 +119,31 @@ def get_possible_unique_key_columns(read_table_name):
     """
     verbose("Checking for UNIQUE columns on %s.%s, by which to chunk" % (database_name, read_table_name))
     query = """
-        SELECT COLUMNS.TABLE_SCHEMA, COLUMNS.TABLE_NAME, COLUMNS.COLUMN_NAME, UNIQUES.INDEX_NAME, COLUMNS.DATA_TYPE, COLUMNS.CHARACTER_SET_NAME
+        SELECT
+          COLUMNS.TABLE_SCHEMA,
+          COLUMNS.TABLE_NAME,
+          COLUMNS.COLUMN_NAME,
+          UNIQUES.INDEX_NAME,
+          UNIQUES.COLUMN_NAMES,
+          UNIQUES.COUNT_COLUMN_IN_INDEX,
+          COLUMNS.DATA_TYPE,
+          COLUMNS.CHARACTER_SET_NAME
         FROM INFORMATION_SCHEMA.COLUMNS INNER JOIN (
-          SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, GROUP_CONCAT(COLUMN_NAME) AS COLUMN_NAME
+          SELECT
+            TABLE_SCHEMA,
+            TABLE_NAME,
+            INDEX_NAME,
+            COUNT(*) AS COUNT_COLUMN_IN_INDEX,
+            GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX ASC) AS COLUMN_NAMES,
+            SUBSTRING_INDEX(GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX ASC), ',', 1) AS FIRST_COLUMN_NAME
           FROM INFORMATION_SCHEMA.STATISTICS
           WHERE NON_UNIQUE=0
           GROUP BY TABLE_SCHEMA, TABLE_NAME, INDEX_NAME
-          HAVING COUNT(*)=1
         ) AS UNIQUES
         ON (
           COLUMNS.TABLE_SCHEMA = UNIQUES.TABLE_SCHEMA AND
           COLUMNS.TABLE_NAME = UNIQUES.TABLE_NAME AND
-          COLUMNS.COLUMN_NAME = UNIQUES.COLUMN_NAME
+          COLUMNS.COLUMN_NAME = UNIQUES.FIRST_COLUMN_NAME
         )
         WHERE
           COLUMNS.TABLE_SCHEMA = '%s'
@@ -166,46 +164,50 @@ def get_possible_unique_key_columns(read_table_name):
             WHEN 'int' THEN 2
             WHEN 'bigint' THEN 3
             ELSE 100
-          END
+          END,
+          COUNT_COLUMN_IN_INDEX
         """ % (database_name, read_table_name)
     rows = get_rows(query)
     return rows
 
 
-def get_possible_unique_key_column_names(read_table_name):
+def get_possible_unique_key_column_names_set(read_table_name):
     """
     Return the names of columns with acceptable unique keys
     """
     rows = get_possible_unique_key_columns(read_table_name)
-    possible_unique_key_column_names = [row["COLUMN_NAME"].lower() for row in rows]
+    possible_unique_key_column_names_set = [row["COLUMN_NAMES"].lower() for row in rows]
 
     verbose("Possible UNIQUE KEY column names in %s.%s:" % (database_name, read_table_name))
-    for possible_unique_key_column_name in possible_unique_key_column_names:
-        verbose("- %s" % possible_unique_key_column_name)
+    for possible_unique_key_column_names in possible_unique_key_column_names_set:
+        verbose("- %s" % possible_unique_key_column_names)
 
-    return set(possible_unique_key_column_names)
+    return set(possible_unique_key_column_names_set)
 
 
-def get_shared_unique_key_column(shared_column_names):
+def get_shared_unique_key_columns(shared_unique_key_column_names_set):
     """
-    Return the column name (lower case) of the AUTO_INCREMENT column in the given table,
-    or None if no such column is found.
+    Choose a unique key, listed in the shared_unique_key_column_names_set (thus
+    it is shared between the original and ghost table), and return the list of
+    columns covered by the key.
     """
 
     rows = get_possible_unique_key_columns(original_table_name)
 
-    unique_key_column_name = None
+    unique_key_column_names = None
     unique_key_type = None
+    count_columns_in_unique_key = None
     if rows:
-        verbose("- Found following possible columns:")
+        verbose("- Found following possible unique keys:")
         for row in rows:
-            column_name = row["COLUMN_NAME"].lower()
-            if column_name in shared_column_names:
+            column_names = row["COLUMN_NAMES"].lower()
+            if column_names in shared_unique_key_column_names_set:
                 column_data_type = row["DATA_TYPE"].lower()
                 character_set_name = row["CHARACTER_SET_NAME"]
-                verbose("- %s (%s)" % (column_name, column_data_type))
-                if unique_key_column_name is None:
-                    unique_key_column_name = column_name
+                count_columns_in_unique_key = int(row["COUNT_COLUMN_IN_INDEX"])
+                verbose("- %s (%s)" % (column_names, column_data_type))
+                if unique_key_column_names is None:
+                    unique_key_column_names = column_names
                     if character_set_name is not None:
                         unique_key_type = "text"
                     elif column_data_type in ["tinyint", "smallint", "int", "bigint"]:
@@ -213,32 +215,9 @@ def get_shared_unique_key_column(shared_column_names):
                     elif column_data_type in ["time", "date", "timestamp", "datetime"]:
                         unique_key_type = "temporal"
 
-        verbose("Chosen unique column is '%s'" % unique_key_column_name)
+        verbose("Chosen unique key is '%s'" % unique_key_column_names)
 
-    return unique_key_column_name, unique_key_type
-
-
-def get_auto_increment_column(read_table_name):
-    """
-    Return the column name (lower case) of the AUTO_INCREMENT column in the given table,
-    or None if no such column is found.
-    """
-    unique_key_column_name = None
-
-    query = """
-        SELECT COLUMN_NAME
-        FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA='%s'
-            AND TABLE_NAME='%s'
-            AND LOCATE('auto_increment', EXTRA) > 0
-        """ % (database_name, read_table_name)
-    row = get_row(query)
-
-    if row:
-        unique_key_column_name = row['COLUMN_NAME'].lower()
-    verbose("%s.%s AUTO_INCREMENT column is %s" % (database_name, read_table_name, unique_key_column_name))
-
-    return unique_key_column_name
+    return unique_key_column_names, count_columns_in_unique_key, unique_key_type
 
 
 def get_table_engine():
@@ -262,7 +241,7 @@ def get_table_engine():
     return engine
 
 
-def validate_no_triggers_exist():
+def validate_no_after_triggers_exist():
     """
     No 'AFTER' triggers allowed on table, since this utility creates all three AFTER
     triggers (INSERT, UPDATE, DELETE)
@@ -275,6 +254,28 @@ def validate_no_triggers_exist():
             AND EVENT_OBJECT_TABLE='%s'
             AND ACTION_TIMING='AFTER'
         """ % (database_name, original_table_name)
+
+    row = get_row(query)
+    count = int(row['count'])
+
+    return count == 0
+
+
+def validate_no_foreign_keys_exist():
+    """
+    At the moment, no foreign keys are allowed
+    """
+
+    query = """
+        SELECT COUNT(*) AS count
+        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+        WHERE
+            REFERENCED_TABLE_NAME IS NOT NULL
+            AND ((TABLE_SCHEMA='%s' AND TABLE_NAME='%s')
+              OR (REFERENCED_TABLE_SCHEMA='%s' AND REFERENCED_TABLE_NAME='%s')
+            )
+        """ % (database_name, original_table_name,
+               database_name, original_table_name)
 
     row = get_row(query)
     count = int(row['count'])
@@ -308,6 +309,8 @@ def drop_table(drop_table_name):
     """
     Drop the given table
     """
+    if not drop_table_name:
+        return
     if table_exists(drop_table_name):
         query = "DROP TABLE IF EXISTS %s.%s" % (database_name, drop_table_name)
         act_query(query)
@@ -409,12 +412,13 @@ def create_custom_triggers():
     """
     Create the three 'AFTER' triggers on the original table
     """
+    unique_key_column_names_old = ",".join(["OLD.%s" % unique_key_column_name for unique_key_column_name in unique_key_column_names_list])
     query = """
         CREATE TRIGGER %s.%s AFTER DELETE ON %s.%s
         FOR EACH ROW
-            DELETE FROM %s.%s WHERE %s = OLD.%s;
+            DELETE FROM %s.%s WHERE (%s) = (%s);
         """ % (database_name, after_delete_trigger_name, database_name, original_table_name,
-               database_name, ghost_table_name, unique_key_column_name, unique_key_column_name)
+               database_name, ghost_table_name, unique_key_column_names, unique_key_column_names_old)
     act_query(query)
     verbose("Created AD trigger")
 
@@ -424,8 +428,12 @@ def create_custom_triggers():
     query = """
         CREATE TRIGGER %s.%s AFTER UPDATE ON %s.%s
         FOR EACH ROW
+        BEGIN
+            DELETE FROM %s.%s WHERE (%s) = (%s);
             REPLACE INTO %s.%s (%s) VALUES (%s);
+        END
         """ % (database_name, after_update_trigger_name, database_name, original_table_name,
+               database_name, ghost_table_name, unique_key_column_names, unique_key_column_names_old,
                database_name, ghost_table_name, shared_columns_listing, shared_columns_new_listing)
     act_query(query)
     verbose("Created AU trigger")
@@ -460,6 +468,8 @@ def trigger_exists(trigger_name):
 
 
 def drop_custom_trigger(trigger_name):
+    if not trigger_name:
+        return
     if trigger_exists(trigger_name):
         query = """
             DROP TRIGGER IF EXISTS %s.%s
@@ -477,37 +487,88 @@ def drop_custom_triggers():
     drop_custom_trigger(after_insert_trigger_name)
 
 
+def get_unique_key_min_values_variables():
+    return ",".join(["@unique_key_min_value_%d" % i for i in range(0,count_columns_in_unique_key)])
+
+def get_unique_key_max_values_variables():
+    return ",".join(["@unique_key_max_value_%d" % i for i in range(0,count_columns_in_unique_key)])
+
+def get_unique_key_range_start_variables():
+    return ",".join(["@unique_key_range_start_%d" % i for i in range(0,count_columns_in_unique_key)])
+
+def get_unique_key_range_end_variables():
+    return ",".join(["@unique_key_range_end_%d" % i for i in range(0,count_columns_in_unique_key)])
+
 def get_unique_key_range():
     """
-    Return the MIN and MAX values for the AUTO INCREMENT column in the original table
+    Return the first and last unique key values in the original table
     """
     query = """
         SELECT
-          MIN(%s), MAX(%s)
+          %s
         FROM %s.%s
-        INTO @unique_key_min_value, @unique_key_max_value
-        """ % (unique_key_column_name, unique_key_column_name,
-               database_name, original_table_name)
+        ORDER BY %s LIMIT 1
+        INTO %s
+        """ % (unique_key_column_names,
+               database_name, original_table_name,
+               ",".join(["%s ASC" % unique_key_column_name for unique_key_column_name in unique_key_column_names_list]),
+               get_unique_key_min_values_variables())
     act_query(query)
 
-    unique_key_min_value = get_session_variable_value("unique_key_min_value")
-    unique_key_max_value = get_session_variable_value("unique_key_max_value")
-    verbose("%s (min, max) values: (%s, %s)" % (unique_key_column_name, unique_key_min_value, unique_key_max_value))
-
-    return unique_key_min_value, unique_key_max_value
-
-
-def set_unique_key_range_end():
     query = """
-        SELECT MAX(%s)
+        SELECT
+          %s
+        FROM %s.%s
+        ORDER BY %s LIMIT 1
+        INTO %s
+        """ % (unique_key_column_names,
+               database_name, original_table_name,
+               ",".join(["%s DESC" % unique_key_column_name for unique_key_column_name in unique_key_column_names_list]),
+               get_unique_key_max_values_variables())
+    act_query(query)
+
+    query = """
+        SELECT
+          COUNT(*) FROM (
+            SELECT NULL
+            FROM %s.%s LIMIT 1
+          ) SEL1 INTO @range_exists
+        """ % (database_name, original_table_name)
+    act_query(query)
+
+    unique_key_min_values = [get_session_variable_value("unique_key_min_value_%d" % i) for i in range(0,count_columns_in_unique_key)]
+    unique_key_max_values = [get_session_variable_value("unique_key_max_value_%d" % i) for i in range(0,count_columns_in_unique_key)]
+    range_exists = int(get_session_variable_value("range_exists"))
+    verbose("%s (min, max) values: (%s, %s)" % (unique_key_column_names, unique_key_min_values, unique_key_max_values))
+
+    return unique_key_min_values, unique_key_max_values, range_exists
+
+
+def set_unique_key_range_end(first_round):
+    """
+    Get the range end: calculate the highest value in the next chunk of rows.
+    """
+
+    limit_count = options.chunk_size
+    if not first_round:
+        limit_count += 1
+
+    query = """
+        SELECT %s
         FROM (SELECT %s FROM %s.%s
-          WHERE %s BETWEEN @unique_key_range_start AND @unique_key_max_value
+          WHERE
+            (%s) >= (%s) AND
+            (%s) <= (%s)
           ORDER BY %s LIMIT %d) SEL1
-        INTO @unique_key_range_end
-        """ % (unique_key_column_name,
-               unique_key_column_name, database_name, original_table_name,
-               unique_key_column_name,
-               unique_key_column_name, options.chunk_size)
+        ORDER BY %s LIMIT 1
+        INTO %s
+        """ % (unique_key_column_names,
+               unique_key_column_names, database_name, original_table_name,
+               unique_key_column_names, get_unique_key_range_start_variables(),
+               unique_key_column_names, get_unique_key_max_values_variables(),
+               ",".join(["%s ASC" % unique_key_column_name for unique_key_column_name in unique_key_column_names_list]), limit_count,
+               ",".join(["%s DESC" % unique_key_column_name for unique_key_column_name in unique_key_column_names_list]),
+               get_unique_key_range_end_variables())
     act_query(query)
 
 
@@ -515,67 +576,113 @@ def set_unique_key_next_range_start():
     """
     Calculate the starting point of the next range
     """
-    if unique_key_type == "integer":
-        query = "SELECT @unique_key_range_end+1 INTO @unique_key_range_start"
-    else:
-        query = "SELECT @unique_key_range_end INTO @unique_key_range_start"
+    query = "SELECT %s INTO %s" % (get_unique_key_range_end_variables(), get_unique_key_range_start_variables())
     act_query(query)
 
 
-def is_range_overflow():
+def is_range_overflow(first_round):
+    if first_round:
+        return False
+
     query = """
-        SELECT (@unique_key_range_start >= @unique_key_max_value) AND (@unique_key_range_end IS NOT NULL) AS range_overflow
-        """
+        SELECT (%s) >= (%s) AS range_overflow
+        """ % (get_unique_key_range_start_variables(), get_unique_key_max_values_variables())
     row = get_row(query)
-    range_overflow = row["range_overflow"]
+    range_overflow = int(row["range_overflow"])
     return range_overflow
 
 
+def get_eta_seconds(elapsed_times, ratio_complete):
+    if not elapsed_times:
+        return 0
+
+    if ratio_complete == 0:
+        return 0
+
+    e0, e1 = elapsed_times[0][0], elapsed_times[-1][0]
+    r0, r1 = elapsed_times[0][1], elapsed_times[-1][1]
+    elapsed_time = e1
+
+    if r1 == r0:
+        return 0
+
+    estimated_total_time = e0 + (1.0 - r0)*(e1 - e0)/(r1 - r0)
+    eta_seconds = estimated_total_time - elapsed_time
+    return eta_seconds
+
+
+def get_eta_presentation(eta_seconds, data_valid):
+    if not data_valid:
+        return "N/A"
+    eta_seconds = round(eta_seconds+0.5)
+    hours = eta_seconds / (60*60)
+    minutes = (eta_seconds / 60) % 60
+    seconds = eta_seconds % 60
+    return "%02d:%02d:%02d" % (hours, minutes, seconds)
+
+
+def get_progress_and_eta_presentation(elapsed_times, elapsed_time, ratio_complete):
+    elapsed_times.append((elapsed_time, ratio_complete,))
+    elapsed_times = elapsed_times[-5:]
+    progress = int(100.0 * ratio_complete)
+    #eta_seconds = get_eta_seconds(elapsed_times, ratio_complete)
+    #return "progress: %d%%, ETA: %s" % (progress, get_eta_presentation(eta_seconds, len(elapsed_times) >= 5))
+    return "progress: %d%%" % progress
+
+
 def act_data_pass(data_pass_query, description):
-    if unique_key_min_value is None:
+    # Is there any range to work with, at all?
+    if not range_exists:
         return
 
     query = """
-        SELECT @unique_key_min_value, NULL INTO @unique_key_range_start, @unique_key_range_end
-        """
+        SELECT %s INTO %s
+        """ % (get_unique_key_min_values_variables(), get_unique_key_range_start_variables())
     act_query(query)
 
-    while not is_range_overflow():
-        set_unique_key_range_end()
+    start_time = time.time()
+    elapsed_times = []
+
+    total_num_affected_rows = 0
+    first_round = True
+    while not is_range_overflow(first_round):
+        if first_round:
+            execute_data_pass_query = data_pass_query.replace('${GT}', '>=')
+        else:
+            execute_data_pass_query = data_pass_query.replace('${GT}', '>')
+        elapsed_time = time.time() - start_time
+
+        set_unique_key_range_end(first_round)
+        first_round = False
+
+        unique_key_range_start_values = [get_session_variable_value("unique_key_range_start_%d" % i) for i in range(0,count_columns_in_unique_key)]
+        unique_key_range_end_values = [get_session_variable_value("unique_key_range_end_%d" % i) for i in range(0,count_columns_in_unique_key)]
+
+        if unique_key_type == "integer":
+            ratio_complete_query = """
+                SELECT
+                    (@unique_key_range_start_0-@unique_key_min_value_0)/
+                    (@unique_key_max_value_0-@unique_key_min_value_0)
+                    AS ratio_complete
+                """
+            ratio_complete = float(get_row(ratio_complete_query)["ratio_complete"])
+            verbose("%s range (%s), (%s), %s" % (description, ",".join(unique_key_range_start_values), ",".join(unique_key_range_end_values), get_progress_and_eta_presentation(elapsed_times, elapsed_time, ratio_complete)))
+        elif unique_key_type == "temporal":
+            ratio_complete_query = """
+                SELECT
+                    TIMESTAMPDIFF(SECOND, @unique_key_min_value_0, @unique_key_range_start_0)/
+                    TIMESTAMPDIFF(SECOND, @unique_key_min_value_0, @unique_key_max_value_0)
+                    AS ratio_complete
+                """
+            ratio_complete = float(get_row(ratio_complete_query)["ratio_complete"])
+            verbose("%s range ('%s', '%s'), %s" % (description, ",".join(unique_key_range_start_values), ",".join(unique_key_range_end_values), get_progress_and_eta_presentation(elapsed_times, elapsed_time, ratio_complete)))
+        else:
+            verbose("%s range (%s), (%s), progress: N/A" % (description, ",".join(unique_key_range_start_values), ",".join(unique_key_range_end_values)))
 
         if options.lock_chunks:
             lock_tables_read()
-
-        progress_indicator = "N/A"
-        unique_key_range_start = get_session_variable_value("unique_key_range_start")
-        unique_key_range_end = get_session_variable_value("unique_key_range_end")
-        if unique_key_type == "integer":
-            query = """
-                SELECT CONVERT(
-                    100.0*
-                    (@unique_key_range_start-@unique_key_min_value)/
-                    (@unique_key_max_value-@unique_key_min_value),
-                UNSIGNED) AS progress
-                """
-            progress = int(get_row(query)["progress"])
-            verbose("%s range (%s, %s), progress: %d%%" % (description, unique_key_range_start, unique_key_range_end, progress))
-        elif unique_key_type == "temporal":
-            query = """
-                SELECT CONVERT(
-                    100.0*
-                    TIMESTAMPDIFF(SECOND, @unique_key_min_value, @unique_key_range_start)/
-                    TIMESTAMPDIFF(SECOND, @unique_key_min_value, @unique_key_max_value),
-                UNSIGNED) AS progress
-                """
-            progress = int(get_row(query)["progress"])
-            verbose("%s range ('%s', '%s'), progress: %d%%" % (description, unique_key_range_start, unique_key_range_end, progress))
-        elif unique_key_type == "text":
-            verbose("%s range ('%s', '%s'), progress: N/A" % (description, unique_key_range_start, unique_key_range_end))
-        else:
-            verbose("%s range (%s, %s), progress: N/A" % (description, unique_key_range_start, unique_key_range_end))
-
-        act_query(data_pass_query)
-
+        num_affected_rows = act_query(execute_data_pass_query)
+        total_num_affected_rows += num_affected_rows
         if options.lock_chunks:
             unlock_tables()
 
@@ -583,46 +690,54 @@ def act_data_pass(data_pass_query, description):
 
         if options.sleep_millis > 0:
             sleep_seconds = options.sleep_millis/1000.0
-            verbose("Will sleep for %f seconds" % sleep_seconds)
+            verbose("Will sleep for %s seconds" % sleep_seconds)
             time.sleep(sleep_seconds)
-    verbose("%s range 100%% complete" % description)
+    verbose("%s range 100%% complete. Number of rows: %s" % (description, total_num_affected_rows))
 
 
 def copy_data_pass():
-    if unique_key_min_value is None:
-        return
-
     shared_columns_listing = ", ".join(shared_columns)
     engine_flags = ""
     if table_engine == "innodb":
         engine_flags = "LOCK IN SHARE MODE"
     data_pass_query = """
         INSERT IGNORE INTO %s.%s (%s)
-            (SELECT %s FROM %s.%s WHERE %s BETWEEN @unique_key_range_start AND @unique_key_range_end
+            (SELECT %s FROM %s.%s
+            WHERE
+              (%s) ${GT} (%s) AND
+              (%s) <= (%s)
             %s)
         """ % (database_name, ghost_table_name, shared_columns_listing,
-            shared_columns_listing, database_name, original_table_name, unique_key_column_name,
+            shared_columns_listing, database_name, original_table_name,
+            unique_key_column_names, get_unique_key_range_start_variables(),
+            unique_key_column_names, get_unique_key_range_end_variables(),
             engine_flags)
+
     act_data_pass(data_pass_query, "Copying")
 
 
 def delete_data_pass():
-    if unique_key_min_value is None:
-        return
-
     shared_columns_listing = ", ".join(shared_columns)
     data_pass_query = """
         DELETE FROM %s.%s
-        WHERE %s BETWEEN @unique_key_range_start AND @unique_key_range_end
-        AND %s NOT IN
-            (SELECT %s FROM %s.%s WHERE %s BETWEEN @unique_key_range_start AND @unique_key_range_end)
+        WHERE
+          (%s) ${GT} (%s) AND
+          (%s) <= (%s)
+        AND (%s) NOT IN
+            (SELECT %s FROM %s.%s
+            WHERE
+              (%s) ${GT} (%s) AND
+              (%s) <= (%s)
+            )
         """ % (database_name, ghost_table_name,
-            unique_key_column_name,
-            unique_key_column_name,
-            unique_key_column_name, database_name, original_table_name, unique_key_column_name)
+            unique_key_column_names, get_unique_key_range_start_variables(),
+            unique_key_column_names, get_unique_key_range_end_variables(),
+            unique_key_column_names,
+            unique_key_column_names, database_name, original_table_name,
+            unique_key_column_names, get_unique_key_range_start_variables(),
+            unique_key_column_names, get_unique_key_range_end_variables())
 
     act_data_pass(data_pass_query, "Deleting")
-
 
 
 def rename_tables():
@@ -646,6 +761,7 @@ def cleanup():
     Remove any data this utility may have created during this runtime or previous runtime.
     """
     if conn:
+        unlock_tables()
         if not options.ghost:
             drop_table(ghost_table_name)
         drop_table(archive_table_name)
@@ -665,7 +781,6 @@ def exit_with_error(error_message):
 try:
     try:
         conn = None
-        reuse_conn = True
         (options, args) = parse_options()
 
         if not options.table:
@@ -676,6 +791,10 @@ try:
 
         database_name = None
         original_table_name =  None
+        archive_table_name = None
+        after_delete_trigger_name = None
+        after_update_trigger_name = None
+        after_insert_trigger_name = None
 
         if options.database:
             database_name=options.database
@@ -714,34 +833,36 @@ try:
                 exit_with_error("Table %s.%s does not exist" % (database_name, original_table_name))
 
             drop_custom_triggers()
-            if not validate_no_triggers_exist():
+            if not validate_no_after_triggers_exist():
                 exit_with_error("Table must not have any 'AFTER' triggers defined.")
 
-            original_table_unique_key_names = get_possible_unique_key_column_names(original_table_name)
-            if not original_table_unique_key_names:
+            if not validate_no_foreign_keys_exist():
+                exit_with_error("Table must not have any foreign keys defined (neither as parent nor child).")
+
+            original_table_unique_key_names_set = get_possible_unique_key_column_names_set(original_table_name)
+            if not original_table_unique_key_names_set:
                 exit_with_error("Table must have a UNIQUE KEY on a single column")
 
             create_ghost_table()
             alter_ghost_table()
 
-            ghost_table_unique_key_names = get_possible_unique_key_column_names(ghost_table_name)
-            if not original_table_unique_key_names:
-                drop_table(ghost_table_name)
+            ghost_table_unique_key_names_set = get_possible_unique_key_column_names_set(ghost_table_name)
+            if not original_table_unique_key_names_set:
                 exit_with_error("Aletered table must have a UNIQUE KEY on a single column")
 
-            shared_unique_key_column_names = original_table_unique_key_names.intersection(ghost_table_unique_key_names)
+            shared_unique_key_column_names_set = original_table_unique_key_names_set.intersection(ghost_table_unique_key_names_set)
 
-            if not shared_unique_key_column_names:
-                drop_table(ghost_table_name)
+            if not shared_unique_key_column_names_set:
                 exit_with_error("Altered table must retain at least one unique key")
 
-            unique_key_column_name, unique_key_type = get_shared_unique_key_column(shared_unique_key_column_names)
+            unique_key_column_names, count_columns_in_unique_key, unique_key_type = get_shared_unique_key_columns(shared_unique_key_column_names_set)
+            unique_key_column_names_list = unique_key_column_names.split(",")
 
             shared_columns = get_shared_columns()
 
             create_custom_triggers()
             lock_tables_write()
-            unique_key_min_value, unique_key_max_value = get_unique_key_range()
+            unique_key_min_values, unique_key_max_values, range_exists = get_unique_key_range()
             unlock_tables()
 
             copy_data_pass()
@@ -754,6 +875,7 @@ try:
                 drop_table(archive_table_name)
                 verbose("ALTER TABLE completed")
     except Exception, err:
+        print Exception, err
         exit_with_error(err)
 finally:
     if conn:
