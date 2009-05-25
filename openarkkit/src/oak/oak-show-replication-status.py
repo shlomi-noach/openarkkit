@@ -72,6 +72,7 @@ def open_master_connection():
             unix_socket = options.socket)
     return conn, username, password, port_number
 
+
 def get_master_logs():
     """
     Get the list of available binary logs on the master
@@ -88,44 +89,66 @@ def get_master_logs():
             cursor.close()
     return master_logs
 
-def get_slave_hosts():
+
+def get_server_id():
+    """
+    Returns the master's server id (to be later compared with listings from SHOW SLAVE HOSTS)
+    """
+    server_id = None
+    cursor = None;
+    try:
+        cursor = master_connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute("SHOW GLOBAL VARIABLES LIKE 'server_id'")
+        row = cursor.fetchone()
+        server_id = int(row["Value"])
+    finally:
+        if cursor:
+            cursor.close()
+    return server_id
+
+
+def get_slave_hosts_and_ports():
     """
     Return the list of slave hosts reported by SHOW SLAVE HOSTS
     """
-    found_slave_hosts = []
+    found_slave_hosts_and_ports = []
+
     cursor = None;
     if not options.skip_show_slave_hosts:
         try:
+            server_id = get_server_id()
             cursor = master_connection.cursor(MySQLdb.cursors.DictCursor)
             cursor.execute("SHOW SLAVE HOSTS")
             result_set = cursor.fetchall()
-            found_slave_hosts = [row["Host"] for row in result_set]
+            # Get host,port for those slaves replicating this master
+            found_slave_hosts_and_ports = [(row["Host"], int(row["Port"]),) for row in result_set if int(row["Master_id"]) == server_id]
         finally:
             if cursor:
                 cursor.close()
-    if not found_slave_hosts:
+    if not found_slave_hosts_and_ports:
         # Couldn't get explicit hosts. Then we'll try to figure them out by SHOW PROCESSLIST.
         # This is less preferable, since the SUPER privilege will be required.
         try:
             cursor = master_connection.cursor(MySQLdb.cursors.DictCursor)
             cursor.execute("SHOW PROCESSLIST")
             result_set = cursor.fetchall()
-            slave_hosts = [row["Host"].split(":")[0] for row in result_set if row["Command"].strip().lower() in ("binlog dump", "table dump")]
+            found_slave_hosts_and_ports = [(row["Host"].split(":")[0], port_number,) for row in result_set if row["Command"].strip().lower() in ("binlog dump", "table dump")]
         finally:
             if cursor:
                 cursor.close()
-    return found_slave_hosts
+    return found_slave_hosts_and_ports
+
 
 def show_slaves_master_log_files():
     """
     Get the list of master logs reported by all slaves (one master logs per found slave)
     """
-    verbose("Slave host\tMaster_Log_File\tSeconds_Behind_Master\tStatus")
-    for slave_host in slave_hosts:
+    verbose("Slave host\tSlave port\tMaster_Log_File\tSeconds_Behind_Master\tStatus")
+    for (slave_host, slave_port,) in slave_hosts_and_ports:
         slave_connection = None
         try:
             try:
-                slave_connection = MySQLdb.connect(host = slave_host, user = username, passwd = password, port = port_number)
+                slave_connection = MySQLdb.connect(host = slave_host, user = username, passwd = password, port = slave_port)
                 slave_cursor = slave_connection.cursor(MySQLdb.cursors.DictCursor)
                 slave_cursor.execute("SHOW SLAVE STATUS")
                 slave_status = slave_cursor.fetchone()
@@ -138,9 +161,9 @@ def show_slaves_master_log_files():
                     status = "Lag"
                 else:
                     status = "Far behind"
-                verbose("%s\t%s\t%s\t%s" % (slave_host, slave_master_log_file, seconds_behind_master, status))
+                verbose("%s\t%d\t%s\t%s\t%s" % (slave_host, slave_port, slave_master_log_file, seconds_behind_master, status))
             except:
-                print_error("Cannot SHOW SLAVE STATUS on %s" % slave_host)
+                print_error("Cannot SHOW SLAVE STATUS on %s:%d" % (slave_host, slave_port,))
         finally:
             if slave_connection:
                 slave_connection.close()
@@ -156,9 +179,9 @@ try:
 
         verbose("master log: %s" % current_master_log)
 
-        slave_hosts = get_slave_hosts()
-        if len(slave_hosts) < options.expect_num_slaves:
-            print_error("Expected: %d slaves. Found: %d" % (options.expect_num_slaves, len(slave_hosts)))
+        slave_hosts_and_ports = get_slave_hosts_and_ports()
+        if len(slave_hosts_and_ports) < options.expect_num_slaves:
+            print_error("Expected: %d slaves. Found: %d" % (options.expect_num_slaves, len(slave_hosts_and_ports)))
         show_slaves_master_log_files()
 
     except Exception, err:
