@@ -103,7 +103,6 @@ def get_rows(query):
 
 
 def get_session_variable_value(session_variable_name):
-
     query = """
         SELECT @%s AS %s
         """ % (session_variable_name, session_variable_name)
@@ -544,6 +543,66 @@ def get_unique_key_range():
     return unique_key_min_values, unique_key_max_values, range_exists
 
 
+def get_value_comparison(column, value, comparison_sign):
+    """
+    Given a column, value and comparison sign, return the SQL comparison of the two.
+    e.g. 'id', 7, '<'
+    results with (id < 7)
+    """
+    return "(%s %s %s)" % (column, comparison_sign, value)
+
+
+def get_multiple_columns_equality(columns, values):
+    """
+    Given a list of columns and a list of values (of same length), produce an
+    SQL equality of the form:
+    ((col1 = val1) AND (col2 = val2) AND...)
+    """
+    if not columns:
+        return ""
+    equalities = []
+    for i in range(0,len(columns)):
+        equalities.append(get_value_comparison(columns[i], values[i], "="))
+    return "(%s)" % " AND ".join(equalities)
+
+
+def get_multiple_columns_non_equality_comparison(columns, values, comparison_sign, include_equality=False):
+    """
+    Given a list of columns and a list of values (of same length), produce a
+    'less than' or 'greater than' (optionally 'or equal') SQL equasion, by splitting into multiple conditions.
+    An example result may look like:
+    (col1 < val1) OR
+    ((col1 = val1) AND (col2 < val2)) OR
+    ((col1 = val1) AND (col2 = val2) AND (col3 < val3)) OR
+    ((col1 = val1) AND (col2 = val2) AND (col3 = val3)))
+    Which stands for (col1, col2, col3) <= (val1, val2, val3).
+    The latter being simple in representation, however MySQL does not utilize keys
+    properly with this form of condition, hence the splitting into multiple conditions.
+    """
+    comparisons = []
+    for i in range(0,len(columns)):
+        equalities_comparison = get_multiple_columns_equality(columns[0:i], values[0:i])
+        range_comparison = get_value_comparison(columns[i], values[i], comparison_sign)
+        if equalities_comparison:
+            comparison = "(%s AND %s)" % (equalities_comparison, range_comparison)
+        else:
+            comparison = range_comparison
+        comparisons.append(comparison)
+    if include_equality:
+        comparisons.append(get_multiple_columns_equality(columns, values))
+    return "(%s)" % " OR ".join(comparisons)
+
+
+def get_multiple_columns_non_equality_comparison_by_names(delimited_columns_names, delimited_values, comparison_sign, include_equality=False):
+    """
+    Assumes 'delimited_columns_names' is comma delimited column names, 'delimited_values' is comma delimited values.
+    @see: get_multiple_columns_non_equality_comparison()
+    """
+    columns = delimited_columns_names.split(",")
+    values = delimited_values.split(",")
+    return get_multiple_columns_non_equality_comparison(columns, values, comparison_sign, include_equality)
+
+
 def set_unique_key_range_end(first_round):
     """
     Get the range end: calculate the highest value in the next chunk of rows.
@@ -557,15 +616,16 @@ def set_unique_key_range_end(first_round):
         SELECT %s
         FROM (SELECT %s FROM %s.%s
           WHERE
-            (%s) >= (%s) AND
-            (%s) <= (%s)
+                %s
+            AND
+                %s
           ORDER BY %s LIMIT %d) SEL1
         ORDER BY %s LIMIT 1
         INTO %s
         """ % (unique_key_column_names,
                unique_key_column_names, database_name, original_table_name,
-               unique_key_column_names, get_unique_key_range_start_variables(),
-               unique_key_column_names, get_unique_key_max_values_variables(),
+               get_multiple_columns_non_equality_comparison_by_names(unique_key_column_names, get_unique_key_range_start_variables(), ">", True),
+               get_multiple_columns_non_equality_comparison_by_names(unique_key_column_names, get_unique_key_max_values_variables(), "<", True),
                ",".join(["%s ASC" % unique_key_column_name for unique_key_column_name in unique_key_column_names_list]), limit_count,
                ",".join(["%s DESC" % unique_key_column_name for unique_key_column_name in unique_key_column_names_list]),
                get_unique_key_range_end_variables())
@@ -630,7 +690,7 @@ def get_progress_and_eta_presentation(elapsed_times, elapsed_time, ratio_complet
     return "progress: %d%%" % progress
 
 
-def act_data_pass(data_pass_query, description):
+def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
     # Is there any range to work with, at all?
     if not range_exists:
         return
@@ -647,9 +707,9 @@ def act_data_pass(data_pass_query, description):
     first_round = True
     while not is_range_overflow(first_round):
         if first_round:
-            execute_data_pass_query = data_pass_query.replace('${GT}', '>=')
+            execute_data_pass_query = first_data_pass_query
         else:
-            execute_data_pass_query = data_pass_query.replace('${GT}', '>')
+            execute_data_pass_query = rest_data_pass_query
         elapsed_time = time.time() - start_time
 
         set_unique_key_range_end(first_round)
@@ -697,47 +757,62 @@ def act_data_pass(data_pass_query, description):
 
 def copy_data_pass():
     shared_columns_listing = ", ".join(shared_columns)
+    
+    # We generate two queries: 
+    # one for first round (includes range start value, or >=),
+    # oen for all the rest (skips range start, or >)
+
     engine_flags = ""
     if table_engine == "innodb":
         engine_flags = "LOCK IN SHARE MODE"
-    data_pass_query = """
+        
+    data_pass_queries = ["""
         INSERT IGNORE INTO %s.%s (%s)
             (SELECT %s FROM %s.%s
-            WHERE
-              (%s) ${GT} (%s) AND
-              (%s) <= (%s)
+            WHERE 
+                (%s
+                AND
+                %s)
             %s)
         """ % (database_name, ghost_table_name, shared_columns_listing,
             shared_columns_listing, database_name, original_table_name,
-            unique_key_column_names, get_unique_key_range_start_variables(),
-            unique_key_column_names, get_unique_key_range_end_variables(),
-            engine_flags)
+            get_multiple_columns_non_equality_comparison_by_names(unique_key_column_names, get_unique_key_range_start_variables(), ">", first_round),
+            get_multiple_columns_non_equality_comparison_by_names(unique_key_column_names, get_unique_key_range_end_variables(), "<", True),
+            engine_flags
+            ) for first_round in [True, False]]
+    first_data_pass_query = data_pass_queries[0]
+    rest_data_pass_query = data_pass_queries[1]
 
-    act_data_pass(data_pass_query, "Copying")
+    act_data_pass(first_data_pass_query, rest_data_pass_query, "Copying")
 
 
 def delete_data_pass():
     shared_columns_listing = ", ".join(shared_columns)
-    data_pass_query = """
+    data_pass_queries = ["""
         DELETE FROM %s.%s
         WHERE
-          (%s) ${GT} (%s) AND
-          (%s) <= (%s)
+            (%s
+            AND
+            %s)
         AND (%s) NOT IN
             (SELECT %s FROM %s.%s
             WHERE
-              (%s) ${GT} (%s) AND
-              (%s) <= (%s)
+                (%s
+                AND
+                %s)
             )
         """ % (database_name, ghost_table_name,
-            unique_key_column_names, get_unique_key_range_start_variables(),
-            unique_key_column_names, get_unique_key_range_end_variables(),
+            get_multiple_columns_non_equality_comparison_by_names(unique_key_column_names, get_unique_key_range_start_variables(), ">", first_round),
+            get_multiple_columns_non_equality_comparison_by_names(unique_key_column_names, get_unique_key_range_end_variables(), "<", True),
             unique_key_column_names,
             unique_key_column_names, database_name, original_table_name,
-            unique_key_column_names, get_unique_key_range_start_variables(),
-            unique_key_column_names, get_unique_key_range_end_variables())
+            get_multiple_columns_non_equality_comparison_by_names(unique_key_column_names, get_unique_key_range_start_variables(), ">", first_round),
+            get_multiple_columns_non_equality_comparison_by_names(unique_key_column_names, get_unique_key_range_end_variables(), "<", True)
+            ) for first_round in [True, False]]
+    first_data_pass_query = data_pass_queries[0]
+    rest_data_pass_query = data_pass_queries[1]
 
-    act_data_pass(data_pass_query, "Deleting")
+    act_data_pass(first_data_pass_query, rest_data_pass_query, "Deleting")
 
 
 def rename_tables():
