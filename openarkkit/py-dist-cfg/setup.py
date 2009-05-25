@@ -13,6 +13,7 @@ setup(
     scripts=[
         "scripts/oak-apply-ri",
         "scripts/oak-block-account",
+        "scripts/oak-chunk-update",
         "scripts/oak-kill-slow-queries",
         "scripts/oak-modify-charset",
         "scripts/oak-online-alter-table",
