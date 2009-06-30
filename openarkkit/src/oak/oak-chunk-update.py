@@ -34,13 +34,11 @@ def parse_options():
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
     parser.add_option("-d", "--database", dest="database", help="Database name (required unless query uses fully qualified table names)")
     parser.add_option("-e", "--execute", dest="execute_query", help="Query (UPDATE or DELETE) to execute, which contains a chunk placeholder (required)")
-    parser.add_option("-t", "--table", dest="table", help="Table with AUTO_INCREMENT column by which to chunk")
     parser.add_option("-c", "--chunk-size", dest="chunk_size", type="int", default=1000, help="Number of rows to act on in chunks (default: 1000). 0 means all rows updated in one operation")
     parser.add_option("", "--no-log-bin", dest="no_log_bin", action="store_true", help="Do not log to binary log (actions will not replicate)")
     parser.add_option("--sleep", dest="sleep_millis", type="int", default=0, help="Number of milliseconds to sleep between chunks. Default: 0")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     parser.add_option("", "--print-progress", dest="print_progress", action="store_true", help="Show number of affected rows")
-    parser.add_option("--print-only", action="store_true", dest="print_only", help="Do not execute. Only print statement")
     return parser.parse_args()
 
 
@@ -53,7 +51,9 @@ def print_error(message):
 
 def open_connection():
     if options.defaults_file:
-        conn = MySQLdb.connect(read_default_file = options.defaults_file)
+        conn = MySQLdb.connect(
+            read_default_file = options.defaults_file,
+            db = database_name)
     else:
         if options.prompt_password:
             password=getpass.getpass()
@@ -98,7 +98,6 @@ def get_rows(query):
 
     cursor.close()
     return rows
-
 
 
 def get_session_variable_value(session_variable_name):
@@ -476,8 +475,8 @@ def chunk_update():
     if options.no_log_bin:
         query = "SET SESSION SQL_LOG_BIN=0"
         act_query(query)
-        
-    # We generate two queries: 
+
+    # We generate two queries:
     # one for first round (includes range start value, or >=),
     # oen for all the rest (skips range start, or >)
     between_statements = ["""
@@ -544,8 +543,6 @@ try:
             exit_with_error("Table must have a UNIQUE KEY on a single column")
         unique_key_column_names_list = unique_key_column_names.split(",")
         fully_qualified_unique_key_column_names = ",".join(["%s.%s" % (table_name, column_name) for column_name in unique_key_column_names_list])
-
-        print unique_key_column_names
 
         lock_table_read()
         unique_key_min_values, unique_key_max_values, range_exists = get_unique_key_range()
