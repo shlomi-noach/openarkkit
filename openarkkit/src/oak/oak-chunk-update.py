@@ -35,6 +35,7 @@ def parse_options():
     parser.add_option("-d", "--database", dest="database", help="Database name (required unless query uses fully qualified table names)")
     parser.add_option("-e", "--execute", dest="execute_query", help="Query (UPDATE or DELETE) to execute, which contains a chunk placeholder (required)")
     parser.add_option("-c", "--chunk-size", dest="chunk_size", type="int", default=1000, help="Number of rows to act on in chunks (default: 1000). 0 means all rows updated in one operation")
+    parser.add_option("", "--terminate-on-not-found", dest="terminate_on_not_found", action="store_true", default="False", help="Terminate on first occurance where chunking did not affect any rows (default: False)")
     parser.add_option("", "--no-log-bin", dest="no_log_bin", action="store_true", help="Do not log to binary log (actions will not replicate)")
     parser.add_option("--sleep", dest="sleep_millis", type="int", default=0, help="Number of milliseconds to sleep between chunks. Default: 0")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
@@ -455,6 +456,9 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
         total_num_affected_rows += num_affected_rows
         if options.print_progress:
             verbose("+ Affected rows: %d" % num_affected_rows)
+        if num_affected_rows == 0 and options.terminate_on_not_found:
+            verbose("+ Will now terminate due to unfound rows")
+            break;
 
         set_unique_key_next_range_start()
 
