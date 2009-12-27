@@ -92,8 +92,8 @@ def kill_blocked_accounts_processes(conn):
     """
     Kill the connections for the blocked account(s)
     """
-    blocked_accounts_processes_ids = blocked_accounts_processes_ids()
-    verbose("Found %s connections to kill" % len(slow_processes_ids))
+    blocked_accounts_processes_ids = get_blocked_accounts_processes_ids()
+    verbose("Found %s connections to kill" % len(blocked_accounts_processes_ids))
     for process_id in blocked_accounts_processes_ids:
         cursor = conn.cursor()
         query = "KILL %d" % process_id
