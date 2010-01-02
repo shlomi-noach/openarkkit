@@ -6,7 +6,7 @@ setup(
     author="Shlomi Noach",
     author_email="shlomi@code.openark.org",
     url="http://code.openark.org/forge/openark-kit",
-    version="96",
+    version="revision.placeholder",
     requires=["MySQLdb"],
     packages=[""],
     package_dir={"": "scripts"},
