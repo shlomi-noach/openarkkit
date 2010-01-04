@@ -18,6 +18,7 @@ setup(
         "scripts/oak-kill-slow-queries",
         "scripts/oak-modify-charset",
         "scripts/oak-online-alter-table",
+        "scripts/oak-prepare-shutdown",
         "scripts/oak-purge-master-logs",
         "scripts/oak-security-audit",
         "scripts/oak-show-limits",
