@@ -21,6 +21,7 @@ import getpass
 import MySQLdb
 import time
 import re
+import traceback
 from optparse import OptionParser
 
 def parse_options():
@@ -37,9 +38,10 @@ def parse_options():
     parser.add_option("-c", "--chunk-size", dest="chunk_size", type="int", default=1000, help="Number of rows to act on in chunks (default: 1000). 0 means all rows updated in one operation")
     parser.add_option("", "--start-with", dest="start_with", type="int", default=None, help="Assuming chunking on numeric field (e.g. AUTO_INCREMENT), start chunking from this value and onward")
     parser.add_option("", "--end-with", dest="end_with", type="int", default=None, help="Assuming chunking on numeric field (e.g. AUTO_INCREMENT), end chunking with this value")
-    parser.add_option("", "--terminate-on-not-found", dest="terminate_on_not_found", action="store_true", default="False", help="Terminate on first occurance where chunking did not affect any rows (default: False)")
+    parser.add_option("", "--terminate-on-not-found", dest="terminate_on_not_found", action="store_true", default=False, help="Terminate on first occurance where chunking did not affect any rows (default: False)")
     parser.add_option("", "--no-log-bin", dest="no_log_bin", action="store_true", help="Do not log to binary log (actions will not replicate)")
     parser.add_option("--sleep", dest="sleep_millis", type="int", default=0, help="Number of milliseconds to sleep between chunks. Default: 0")
+    parser.add_option("", "--debug", dest="debug", action="store_true", help="Print stack trace on error")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     parser.add_option("", "--print-progress", dest="print_progress", action="store_true", help="Show number of affected rows")
     return parser.parse_args()
@@ -269,7 +271,7 @@ def get_unique_key_range():
     act_query(query)
 
     # Last (highest) unique key values:
-    if options.start_with is not None:
+    if options.end_with is not None:
         if unique_key_type == "integer" and count_columns_in_unique_key == 1:
             query = "SELECT %d INTO %s" % (options.end_with, get_unique_key_max_values_variables())
             verbose("Ending with: %d" % options.end_with)
@@ -572,6 +574,8 @@ try:
 
         verbose("Chunk update completed")
     except Exception, err:
+        if options.debug:
+            traceback.print_exc()
         print err
 finally:
     if conn:
