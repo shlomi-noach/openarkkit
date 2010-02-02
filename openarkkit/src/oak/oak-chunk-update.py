@@ -39,6 +39,7 @@ def parse_options():
     parser.add_option("", "--start-with", dest="start_with", type="int", default=None, help="Assuming chunking on numeric field (e.g. AUTO_INCREMENT), start chunking from this value and onward")
     parser.add_option("", "--end-with", dest="end_with", type="int", default=None, help="Assuming chunking on numeric field (e.g. AUTO_INCREMENT), end chunking with this value")
     parser.add_option("", "--terminate-on-not-found", dest="terminate_on_not_found", action="store_true", default=False, help="Terminate on first occurance where chunking did not affect any rows (default: False)")
+    parser.add_option("", "--force-chunking-column", dest="forced_chunking_column", default=None, help="(Single) column to chunk by; avoids querying in INFORMATION_SCHEMA. Format: column_name:type, where type is integer/text/temporal")
     parser.add_option("", "--no-log-bin", dest="no_log_bin", action="store_true", help="Do not log to binary log (actions will not replicate)")
     parser.add_option("--sleep", dest="sleep_millis", type="int", default=0, help="Number of milliseconds to sleep between chunks. Default: 0")
     parser.add_option("", "--debug", dest="debug", action="store_true", help="Print stack trace on error")
@@ -197,6 +198,12 @@ def get_selected_unique_key_column_names(read_table_name):
     """
     Return the names of columns with acceptable unique keys
     """
+    if options.forced_chunking_column:
+        column_name, unique_key_type = options.forced_chunking_column.split(":")
+        verbose("Forced column %s of type %s" % (column_name, unique_key_type))
+        return column_name, 1, unique_key_type 
+    
+    # No forcing; check for column in INFORMATION_SCHEMA
     rows = get_possible_unique_key_columns(read_table_name)
     if not rows:
         return None
