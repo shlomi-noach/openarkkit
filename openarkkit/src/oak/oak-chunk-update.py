@@ -36,10 +36,11 @@ def parse_options():
     parser.add_option("-d", "--database", dest="database", help="Database name (required unless query uses fully qualified table names)")
     parser.add_option("-e", "--execute", dest="execute_query", help="Query (UPDATE or DELETE) to execute, which contains a chunk placeholder (required)")
     parser.add_option("-c", "--chunk-size", dest="chunk_size", type="int", default=1000, help="Number of rows to act on in chunks (default: 1000). 0 means all rows updated in one operation")
-    parser.add_option("", "--start-with", dest="start_with", default=None, help="Assuming chunking on numeric field (e.g. AUTO_INCREMENT), start chunking from this value and onward. Either provide a constant or a query returning a single interger value.")
-    parser.add_option("", "--end-with", dest="end_with", default=None, help="Assuming chunking on numeric field (e.g. AUTO_INCREMENT), end chunking with this value. Either provide a constant or a query returning a single interger value.")
-    parser.add_option("", "--terminate-on-not-found", dest="terminate_on_not_found", action="store_true", default=False, help="Terminate on first occurance where chunking did not affect any rows (default: False)")
+    parser.add_option("", "--start-with", dest="start_with", default=None, help="Assuming chunking on numeric field (e.g. AUTO_INCREMENT), start chunking from this value and onward. Either provide a constant or a query returning a single integer value.")
+    parser.add_option("", "--end-with", dest="end_with", default=None, help="Assuming chunking on numeric field (e.g. AUTO_INCREMENT), end chunking with this value. Either provide a constant or a query returning a single integer value.")
+    parser.add_option("", "--terminate-on-not-found", dest="terminate_on_not_found", action="store_true", default=False, help="Terminate on first occurrence where chunking did not affect any rows (default: False)")
     parser.add_option("", "--force-chunking-column", dest="forced_chunking_column", default=None, help="Columns to chunk by; avoids querying in INFORMATION_SCHEMA. Format: either column_name:type, where type is integer/text/temporal - for single column keys, or column1_name,column2_name,... for one or more column keys, with no type.")
+    parser.add_option("", "--skip-lock-tables", dest="skip_lock_tables", action="store_true", default=False, help="Do not issue a LOCK TABLES READ. May be required when using queries within --start-with or --end-with")
     parser.add_option("", "--no-log-bin", dest="no_log_bin", action="store_true", help="Do not log to binary log (actions will not replicate)")
     parser.add_option("--sleep", dest="sleep_millis", type="int", default=0, help="Number of milliseconds to sleep between chunks. Default: 0")
     parser.add_option("", "--debug", dest="debug", action="store_true", help="Print stack trace on error")
@@ -280,8 +281,10 @@ def get_unique_key_range():
     """
     # First (lowest) unique key values:
     if options.start_with is not None:
+        # Sanity:
         if unique_key_type == "integer" and count_columns_in_unique_key == 1:
             if options.start_with.isdigit():
+                # Constant provided
                 start_with = int(options.start_with)
             else:
                 row = get_row_nondict(options.start_with)
@@ -305,8 +308,10 @@ def get_unique_key_range():
 
     # Last (highest) unique key values:
     if options.end_with is not None:
+        # Sanity:
         if unique_key_type == "integer" and count_columns_in_unique_key == 1:
             if options.end_with.isdigit():
+                # Constant provided
                 end_with = int(options.end_with)
             else:
                 row = get_row_nondict(options.end_with)
@@ -612,7 +617,8 @@ try:
         unique_key_column_names_list = unique_key_column_names.split(",")
         fully_qualified_unique_key_column_names = ",".join(["%s.%s" % (table_name, column_name) for column_name in unique_key_column_names_list])
 
-        lock_table_read()
+        if not options.skip_lock_tables:
+            lock_table_read()
         unique_key_min_values, unique_key_max_values, range_exists = get_unique_key_range()
         unlock_table()
 

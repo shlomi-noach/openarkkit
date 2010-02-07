@@ -26,6 +26,7 @@
 		</condition>
 		<delete dir="ant-tmp"/>
 		<tstamp description="To be used as build number"/>
+		<echo>revision: ${svn.revision}</echo>
 	</target>
 
 
