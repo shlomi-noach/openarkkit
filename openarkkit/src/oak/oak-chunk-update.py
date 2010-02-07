@@ -36,10 +36,10 @@ def parse_options():
     parser.add_option("-d", "--database", dest="database", help="Database name (required unless query uses fully qualified table names)")
     parser.add_option("-e", "--execute", dest="execute_query", help="Query (UPDATE or DELETE) to execute, which contains a chunk placeholder (required)")
     parser.add_option("-c", "--chunk-size", dest="chunk_size", type="int", default=1000, help="Number of rows to act on in chunks (default: 1000). 0 means all rows updated in one operation")
-    parser.add_option("", "--start-with", dest="start_with", type="int", default=None, help="Assuming chunking on numeric field (e.g. AUTO_INCREMENT), start chunking from this value and onward")
-    parser.add_option("", "--end-with", dest="end_with", type="int", default=None, help="Assuming chunking on numeric field (e.g. AUTO_INCREMENT), end chunking with this value")
+    parser.add_option("", "--start-with", dest="start_with", default=None, help="Assuming chunking on numeric field (e.g. AUTO_INCREMENT), start chunking from this value and onward. Either provide a constant or a query returning a single interger value.")
+    parser.add_option("", "--end-with", dest="end_with", default=None, help="Assuming chunking on numeric field (e.g. AUTO_INCREMENT), end chunking with this value. Either provide a constant or a query returning a single interger value.")
     parser.add_option("", "--terminate-on-not-found", dest="terminate_on_not_found", action="store_true", default=False, help="Terminate on first occurance where chunking did not affect any rows (default: False)")
-    parser.add_option("", "--force-chunking-column", dest="forced_chunking_column", default=None, help="(Single) column to chunk by; avoids querying in INFORMATION_SCHEMA. Format: column_name:type, where type is integer/text/temporal")
+    parser.add_option("", "--force-chunking-column", dest="forced_chunking_column", default=None, help="Columns to chunk by; avoids querying in INFORMATION_SCHEMA. Format: either column_name:type, where type is integer/text/temporal - for single column keys, or column1_name,column2_name,... for one or more column keys, with no type.")
     parser.add_option("", "--no-log-bin", dest="no_log_bin", action="store_true", help="Do not log to binary log (actions will not replicate)")
     parser.add_option("--sleep", dest="sleep_millis", type="int", default=0, help="Number of milliseconds to sleep between chunks. Default: 0")
     parser.add_option("", "--debug", dest="debug", action="store_true", help="Print stack trace on error")
@@ -84,6 +84,16 @@ def act_query(query):
     cursor.close()
     connection.commit()
     return num_affected_rows
+
+
+def get_row_nondict(query):
+    connection = conn
+    cursor = connection.cursor()
+    cursor.execute(query)
+    row = cursor.fetchone()
+
+    cursor.close()
+    return row
 
 
 def get_row(query):
@@ -199,9 +209,20 @@ def get_selected_unique_key_column_names(read_table_name):
     Return the names of columns with acceptable unique keys
     """
     if options.forced_chunking_column:
-        column_name, unique_key_type = options.forced_chunking_column.split(":")
-        verbose("Forced column %s of type %s" % (column_name, unique_key_type))
-        return column_name, 1, unique_key_type 
+        forced_chunking_column_tokens = options.forced_chunking_column.split(",")
+        if len(forced_chunking_column_tokens) > 1:
+            # Multicolumn key; we do not expect column types, so it's just names
+            verbose("Forced columns: %s" % options.forced_chunking_column)
+            return options.forced_chunking_column, len(forced_chunking_column_tokens), None
+        else:
+            # Single column; let's see if it contains a type
+            if len(options.forced_chunking_column.split(":")) > 1:
+                column_name, unique_key_type = options.forced_chunking_column.split(":")
+                verbose("Forced column %s of type %s" % (column_name, unique_key_type))
+                return column_name, 1, unique_key_type
+            else:
+                verbose("Forced column %s of ungiven type" % options.forced_chunking_column)
+                return options.forced_chunking_column, 1, None
     
     # No forcing; check for column in INFORMATION_SCHEMA
     rows = get_possible_unique_key_columns(read_table_name)
@@ -260,8 +281,13 @@ def get_unique_key_range():
     # First (lowest) unique key values:
     if options.start_with is not None:
         if unique_key_type == "integer" and count_columns_in_unique_key == 1:
-            query = "SELECT %d INTO %s" % (options.start_with, get_unique_key_min_values_variables())
-            verbose("Starting with: %d" % options.start_with)
+            if options.start_with.isdigit():
+                start_with = int(options.start_with)
+            else:
+                row = get_row_nondict(options.start_with)
+                start_with = row[0]
+            query = "SELECT %d INTO %s" % (start_with, get_unique_key_min_values_variables())
+            verbose("Starting with: %d" % start_with)
         else:
             exit_with_error("--start-with only applies to single column integer chunking keys")
     else:
@@ -280,8 +306,13 @@ def get_unique_key_range():
     # Last (highest) unique key values:
     if options.end_with is not None:
         if unique_key_type == "integer" and count_columns_in_unique_key == 1:
-            query = "SELECT %d INTO %s" % (options.end_with, get_unique_key_max_values_variables())
-            verbose("Ending with: %d" % options.end_with)
+            if options.end_with.isdigit():
+                end_with = int(options.end_with)
+            else:
+                row = get_row_nondict(options.end_with)
+                end_with = row[0]
+            query = "SELECT %d INTO %s" % (end_with, get_unique_key_max_values_variables())
+            verbose("Ending with: %d" % end_with)
         else:
             exit_with_error("--end-with only applies to single column integer chunking keys")
     else:
@@ -449,6 +480,9 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
             execute_data_pass_query = first_data_pass_query
         else:
             execute_data_pass_query = rest_data_pass_query
+        if not execute_data_pass_query:
+            # Can happen when chunk-size=0, thus doing everything in one chunk
+            break
 
         set_unique_key_range_end(first_round)
         first_round = False
@@ -516,8 +550,13 @@ def chunk_update():
             get_multiple_columns_non_equality_comparison_by_names(fully_qualified_unique_key_column_names, get_unique_key_range_start_variables(), ">", first_round),
             get_multiple_columns_non_equality_comparison_by_names(fully_qualified_unique_key_column_names, get_unique_key_range_end_variables(), "<", True)
         ) for first_round in [True, False]]
-    first_data_pass_query = "%s %s %s" % (options.execute_query[:match.start()], between_statements[0], options.execute_query[match.end():])
-    rest_data_pass_query = "%s %s %s" % (options.execute_query[:match.start()], between_statements[1], options.execute_query[match.end():])
+    if options.chunk_size > 0:
+        first_data_pass_query = "%s %s %s" % (options.execute_query[:match.start()], between_statements[0], options.execute_query[match.end():])
+        rest_data_pass_query = "%s %s %s" % (options.execute_query[:match.start()], between_statements[1], options.execute_query[match.end():])
+    else:
+        first_data_pass_query = "%s %s %s" % (options.execute_query[:match.start()], "1", options.execute_query[match.end():])
+        rest_data_pass_query = None
+        verbose("chunk size is zero; Will only execute: %s" % first_data_pass_query)
     act_data_pass(first_data_pass_query, rest_data_pass_query, "Performing chunks")
 
 
