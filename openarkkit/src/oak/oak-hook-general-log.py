@@ -194,10 +194,13 @@ def hook_general_log():
     enable_general_log_table_output()
     drop_shadow_tables()
     create_shadow_table()
-    while time.time() - start_time < options.timeout_minutes*60:
-        rotate_general_log_table()
-        dump_general_log_snapshot()
-        time.sleep(options.sleep_time)
+    try:
+        while time.time() - start_time < options.timeout_minutes*60:
+            rotate_general_log_table()
+            dump_general_log_snapshot()
+            time.sleep(options.sleep_time)
+    except KeyboardInterrupt:
+        pass
         
     drop_shadow_tables()
     restore_original_log_settings()
