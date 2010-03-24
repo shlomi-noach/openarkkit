@@ -49,7 +49,7 @@ def verbose(message):
         print "-- %s" % message
 
 def print_error(message):
-    print >>sys.stderr, message
+    sys.stderr.write("-- ERROR: %s\n" % message)
 
 def open_connection():
     if options.defaults_file:
@@ -100,8 +100,8 @@ def get_rows(query):
     return rows
 
 
-def get_status_variable(variable_name):
-    row = get_row("SHOW GLOBAL STATUS LIKE '%s'" % variable_name);
+def get_global_variable(variable_name):
+    row = get_row("SHOW GLOBAL VARIABLES LIKE '%s'" % variable_name);
     value = row["Value"]
     return value
 
@@ -113,7 +113,7 @@ def get_log_output():
 def store_original_log_settings():
     act_query("SET @general_log_original_setting = @@global.general_log")
     act_query("SET @log_output_original_setting = @@global.log_output")
-    verbose("Stored original settings")
+    verbose("Stored original settings: general_log=%s, log_output=%s" % (get_global_variable("general_log"), get_global_variable("log_output")))
 
 def restore_original_log_settings():
     act_query("SET @@global.general_log = @general_log_original_setting")
@@ -121,11 +121,13 @@ def restore_original_log_settings():
     verbose("Restored original settings")
 
 def enable_general_log_table_output():
+    global originally_used_log_tables
+    
     act_query("SET @@session.sql_log_off=1")
     act_query("SET @@global.general_log='ON'")
     log_output = get_log_output()
     if log_output.find("TABLE") >= 0:
-        pass
+        originally_used_log_tables = True
     elif log_output.find("NONE") >= 0:
         log_output = "TABLE"
     else:
@@ -170,6 +172,17 @@ def rotate_general_log_table():
     verbose("%s is now active" % active_shadow_table)
 
 
+def truncate_slow_log_table():
+    """
+    When enabling table logs, both general log and slow log tables are enabled at once.
+    When log_queries_not_using_indexes is used, we can be certain that this very tool will
+    cause for bloating of the slow_log.
+    Anyway, we want to make sure the slow_log table does not bloat. We therefore TRUNCATE it.
+    """
+    query = "TRUNCATE mysql.slow_log"
+    act_query(query)
+    
+
 def dump_general_log_snapshot():
     rows = get_rows("SELECT * FROM mysql.%s" % active_shadow_table)
     for row in rows:
@@ -187,7 +200,6 @@ def dump_general_log_snapshot():
             sys.stdout.flush()
         
 
-
 def hook_general_log():
     start_time = time.time()
     store_original_log_settings()
@@ -197,9 +209,12 @@ def hook_general_log():
     try:
         while time.time() - start_time < options.timeout_minutes*60:
             rotate_general_log_table()
+            if not originally_used_log_tables:
+                truncate_slow_log_table()
             dump_general_log_snapshot()
             time.sleep(options.sleep_time)
     except KeyboardInterrupt:
+        # Catch a Ctrl-C. We still want to restore defaults, most probably disabling general log.
         pass
         
     drop_shadow_tables()
@@ -226,6 +241,7 @@ try:
         shadow_tables = ["general_log_shadow_0", "general_log_shadow_1"]
         active_shadow_table = shadow_tables[0]
         num_rotates = 0
+        originally_used_log_tables = False
         
         hook_general_log()
     except Exception, err:

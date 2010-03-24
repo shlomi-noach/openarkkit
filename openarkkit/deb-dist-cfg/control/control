@@ -5,7 +5,7 @@ Priority: optional
 Architecture: all
 Essential: no
 Depends: python-mysqldb
-Installed-Size: 70
+Installed-Size: 160
 Maintainer: Shlomi Noach [shlomi@code.openark.org]
 Description: Common utilities for MySQL
  A general purpose toolkit for managing various aspects in MySQL.

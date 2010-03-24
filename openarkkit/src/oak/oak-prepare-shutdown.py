@@ -44,7 +44,7 @@ def verbose(message):
         print "-- %s" % message
 
 def print_error(message):
-    print >>sys.stderr, message
+    sys.stderr.write("-- ERROR: %s\n" % message)
 
 def open_connection():
     if options.defaults_file:
@@ -153,7 +153,6 @@ def prepare_shutdown():
             num_succesive_non_improvements += 1
             verbose("No improvement from %d" % min_innodb_buffer_pool_pages_dirty)
     verbose("Found no improvement for %d successive attempts. Will now terminate" % max_succesive_non_improvements)
-
 
 
 def exit_with_error(error_message):

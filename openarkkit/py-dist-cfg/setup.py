@@ -15,6 +15,7 @@ setup(
         "scripts/oak-block-account",
         "scripts/oak-chunk-update",
         "scripts/oak-get-slave-lag",
+        "scripts/oak-hook-general-log",
         "scripts/oak-kill-slow-queries",
         "scripts/oak-modify-charset",
         "scripts/oak-online-alter-table",
