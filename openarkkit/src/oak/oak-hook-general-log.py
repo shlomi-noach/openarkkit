@@ -38,7 +38,8 @@ def parse_options():
     parser.add_option("-t", "--timeout-minutes", dest="timeout_minutes", type="int", default=1, help="Auto disconnect after given number of minutes (default: 1)")
     parser.add_option("-s", "--sleep-time", dest="sleep_time", type="int", default=1, help="Number of seconds between log polling (default: 1)")
     parser.add_option("", "--only-queries", dest="only_queries", action="store_true", default=False, help="Only print out logs of type Query")
-    parser.add_option("", "--discard-existing", dest="discard_existing", action="store_true", default=False, help="Discard possibly pre-existing entries in the general log table")
+    parser.add_option("-f", "--filter", dest="filter", default=None, help="Only output logs of certain type. Valid values: [explain_fullscan|explain_temporary|explain_filesort|query|connection]")
+    parser.add_option("", "--include-existing", dest="include_existing", action="store_true", default=False, help="Include possibly pre-existing entries in the general log table (default: disabled)")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     parser.add_option("", "--debug", dest="debug", action="store_true", help="Print stack trace on error")
     return parser.parse_args()
@@ -99,6 +100,39 @@ def get_rows(query):
     cursor.close()
     return rows
 
+
+def get_explain_plan(query, database):
+    if database:
+        act_query("USE %s" % database)
+    explain_query = "EXPLAIN %s" % query
+    rows = get_rows(explain_query)
+    return rows
+
+
+def explain_plan_contains(query, database, explain_column, search_value):
+    if not query.lower().strip().startswith("select"):
+        return False
+
+    explain_plan = get_explain_plan(query, database)
+    for explain_row in explain_plan:
+        if explain_row[explain_column].find(search_value) >= 0:
+            return True
+    return False
+
+
+def get_processlist():
+    rows = get_rows("SHOW PROCESSLIST")
+    return rows
+
+
+def get_database_per_connection_map():
+    database_per_connection_map = {}
+    for row in get_processlist():
+        connection_id = row["Id"]
+        database = row["db"]
+        database_per_connection_map[connection_id] = database
+    return database_per_connection_map 
+    
 
 def get_global_variable(variable_name):
     row = get_row("SHOW GLOBAL VARIABLES LIKE '%s'" % variable_name);
@@ -166,7 +200,7 @@ def rotate_general_log_table():
     cleanup_active_shadow_table()
     act_query("RENAME TABLE mysql.general_log TO mysql.%s, mysql.%s TO mysql.general_log" % (get_inactive_shadow_table(), active_shadow_table))
     active_shadow_table = get_inactive_shadow_table()    
-    if options.discard_existing and num_rotates == 0:
+    if num_rotates == 0 and not options.include_existing:
         cleanup_active_shadow_table()
     num_rotates = num_rotates + 1
     verbose("%s is now active" % active_shadow_table)
@@ -184,6 +218,7 @@ def truncate_slow_log_table():
     
 
 def dump_general_log_snapshot():
+    database_per_connection_map = get_database_per_connection_map()
     rows = get_rows("SELECT * FROM mysql.%s" % active_shadow_table)
     for row in rows:
         event_time = row["event_time"]
@@ -192,9 +227,32 @@ def dump_general_log_snapshot():
         server_id = row["server_id"]
         command_type = row["command_type"]
         argument = row["argument"]
-        should_print = True
-        if options.only_queries and command_type != "Query":
-            should_print = False
+        
+        database = None
+        if database_per_connection_map.has_key(thread_id):
+            database = database_per_connection_map[thread_id]
+
+        should_print = False
+        if options.filter is None:
+            should_print = True
+        elif options.filter == "explain_fullscan":
+            if explain_plan_contains(argument, database, "type", "ALL"):
+                should_print = True
+        elif options.filter == "explain_temporary":
+            if explain_plan_contains(argument, database, "Extra", "Using temporary"):
+                should_print = True
+        elif options.filter == "explain_filesort":
+            if explain_plan_contains(argument, database, "Extra", "Using filesort"):
+                should_print = True
+        elif options.filter == "query":
+            if command_type == "Query":
+                should_print = True
+        elif options.filter == "connection":
+            if command_type in ["Connect", "Quit"]:
+                should_print = True
+        else:
+            exit_with_error("Unknown filter value: %s" % options.filter)
+
         if should_print:
             print "%s\t%s\t%s\t%s\t%s\t%s" % (event_time, user_host, thread_id, server_id, command_type, argument)
             sys.stdout.flush()
