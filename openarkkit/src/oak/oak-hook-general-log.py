@@ -218,7 +218,8 @@ def truncate_slow_log_table():
     
 
 def dump_general_log_snapshot():
-    database_per_connection_map = get_database_per_connection_map()
+    database_per_connection_map.update(get_database_per_connection_map())
+    print database_per_connection_map
     rows = get_rows("SELECT * FROM mysql.%s" % active_shadow_table)
     for row in rows:
         event_time = row["event_time"]
@@ -300,6 +301,7 @@ try:
         active_shadow_table = shadow_tables[0]
         num_rotates = 0
         originally_used_log_tables = False
+        database_per_connection_map = {}
         
         hook_general_log()
     except Exception, err:
