@@ -41,6 +41,7 @@ def parse_options():
     parser.add_option("", "--terminate-on-not-found", dest="terminate_on_not_found", action="store_true", default=False, help="Terminate on first occurrence where chunking did not affect any rows (default: False)")
     parser.add_option("", "--force-chunking-column", dest="forced_chunking_column", default=None, help="Columns to chunk by; avoids querying in INFORMATION_SCHEMA. Format: either column_name:type, where type is integer/text/temporal - for single column keys, or column1_name,column2_name,... for one or more column keys, with no type.")
     parser.add_option("", "--skip-lock-tables", dest="skip_lock_tables", action="store_true", default=False, help="Do not issue a LOCK TABLES READ. May be required when using queries within --start-with or --end-with")
+    parser.add_option("", "--skip-retry-chunk", dest="skip_retry_chunk", action="store_true", default=False, help="Avoid retrying a chunk operation on error. Default: false")
     parser.add_option("", "--no-log-bin", dest="no_log_bin", action="store_true", help="Do not log to binary log (actions will not replicate)")
     parser.add_option("--sleep", dest="sleep_millis", type="int", default=0, help="Number of milliseconds to sleep between chunks. Default: 0")
     parser.add_option("", "--debug", dest="debug", action="store_true", help="Print stack trace on error")
@@ -516,8 +517,16 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
         else:
             verbose("%s range (%s), (%s), progress: N/A" % (description, ",".join(unique_key_range_start_values), ",".join(unique_key_range_end_values)))
 
-        num_affected_rows = act_query(execute_data_pass_query)
-        total_num_affected_rows += num_affected_rows
+
+        retry_data_pass = True
+        while retry_data_pass:
+            try:
+                num_affected_rows = act_query(execute_data_pass_query)
+                total_num_affected_rows += num_affected_rows
+                retry_data_pass = False
+            except:
+                if options.skip_retry_chunk:                 
+                    retry_data_pass = False
         if options.print_progress:
             verbose("+ Affected rows: %d" % num_affected_rows)
         if num_affected_rows == 0 and options.terminate_on_not_found:
