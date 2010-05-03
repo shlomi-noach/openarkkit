@@ -37,8 +37,14 @@ def parse_options():
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
     parser.add_option("-t", "--timeout-minutes", dest="timeout_minutes", type="int", default=1, help="Auto disconnect after given number of minutes (default: 1)")
     parser.add_option("-s", "--sleep-time", dest="sleep_time", type="int", default=1, help="Number of seconds between log polling (default: 1)")
-    parser.add_option("", "--only-queries", dest="only_queries", action="store_true", default=False, help="Only print out logs of type Query")
-    parser.add_option("-f", "--filter", dest="filter", default=None, help="Only output logs of certain type. Valid values: [explain_fullscan|explain_temporary|explain_filesort|query|connection]")
+    parser.add_option("", "--filter-connection", dest="filter_connection", action="store_true", default=False, help="Only output connect/disconnect entries")
+    parser.add_option("", "--filter-explain-contains", dest="filter_explain_contains", default=None, help="Only output queries whose execution plan contains given text")
+    parser.add_option("", "--filter-explain-fullscan", dest="filter_explain_fullscan", action="store_true", default=False, help="Only output queries where execution plan indicates full table scan")
+    parser.add_option("", "--filter-explain-indexscan", dest="filter_explain_indexscan", action="store_true", default=False, help="Only output queries where execution plan indicates full index scan")
+    parser.add_option("", "--filter-explain-temporary", dest="filter_explain_temporary", action="store_true", default=False, help="Only output queries where execution plan indicates use of temporary tables")
+    parser.add_option("", "--filter-explain-filesort", dest="filter_explain_filesort", action="store_true", default=False, help="Only output queries where execution plan indicates filesort")
+    parser.add_option("", "--filter-explain-fulljoin", dest="filter_explain_fulljoin", action="store_true", default=False, help="Only output queries where execution plan indicates full join")
+    parser.add_option("", "--filter-query", dest="filter_query", action="store_true", default=False, help="Only output queries")
     parser.add_option("", "--include-existing", dest="include_existing", action="store_true", default=False, help="Include possibly pre-existing entries in the general log table (default: disabled)")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     parser.add_option("", "--debug", dest="debug", action="store_true", help="Print stack trace on error")
@@ -109,13 +115,34 @@ def get_explain_plan(query, database):
     return rows
 
 
+def get_cached_explain_plan(query, database):
+    global cached_explain_plan
+    if cached_explain_plan:
+        return cached_explain_plan
+    cached_explain_plan = get_explain_plan(query, database)
+    return cached_explain_plan
+
+
+def explain_plan_any_contains(query, database, search_value):
+    if not query.lower().strip().startswith("select"):
+        return False
+
+    explain_plan = get_cached_explain_plan(query, database)
+    for explain_row in explain_plan:
+        existing_values = ["%s" % value for value in explain_row.values() if value]
+        concatenated_values = "\n".join(existing_values).lower()
+        if concatenated_values.find(search_value.lower()) >= 0:
+            return True
+    return False
+
+
 def explain_plan_contains(query, database, explain_column, search_value):
     if not query.lower().strip().startswith("select"):
         return False
 
     explain_plan = get_explain_plan(query, database)
     for explain_row in explain_plan:
-        if explain_row[explain_column].find(search_value) >= 0:
+        if explain_row[explain_column] and explain_row[explain_column].find(search_value) >= 0:
             return True
     return False
 
@@ -144,14 +171,22 @@ def get_log_output():
     log_output = get_row("SELECT UPPER(@@global.log_output) AS log_output")["log_output"]
     return log_output
 
+
+def get_restore_statement():
+    return "SET @@global.general_log='%s', @@global.log_output='%s';" % (general_log_original_setting, log_output_original_setting)
+
 def store_original_log_settings():
-    act_query("SET @general_log_original_setting = @@global.general_log")
-    act_query("SET @log_output_original_setting = @@global.log_output")
-    verbose("Stored original settings: general_log=%s, log_output=%s" % (get_global_variable("general_log"), get_global_variable("log_output")))
+    global general_log_original_setting
+    global log_output_original_setting
+    
+    general_log_original_setting = get_global_variable("general_log")
+    log_output_original_setting = get_global_variable("log_output")
+    verbose("Stored original settings. To recover original settings in case of a problem, issue:")
+    verbose(get_restore_statement())
+
 
 def restore_original_log_settings():
-    act_query("SET @@global.general_log = @general_log_original_setting")
-    act_query("SET @@global.log_output = @log_output_original_setting")
+    act_query(get_restore_statement())
     verbose("Restored original settings")
 
 def enable_general_log_table_output():
@@ -218,10 +253,11 @@ def truncate_slow_log_table():
     
 
 def dump_general_log_snapshot():
+    global cached_explain_plan
     database_per_connection_map.update(get_database_per_connection_map())
-    print database_per_connection_map
     rows = get_rows("SELECT * FROM mysql.%s" % active_shadow_table)
     for row in rows:
+        cached_explain_plan = None
         event_time = row["event_time"]
         user_host = row["user_host"]
         thread_id = row["thread_id"]
@@ -234,26 +270,26 @@ def dump_general_log_snapshot():
             database = database_per_connection_map[thread_id]
 
         should_print = False
-        if options.filter is None:
-            should_print = True
-        elif options.filter == "explain_fullscan":
-            if explain_plan_contains(argument, database, "type", "ALL"):
-                should_print = True
-        elif options.filter == "explain_temporary":
-            if explain_plan_contains(argument, database, "Extra", "Using temporary"):
-                should_print = True
-        elif options.filter == "explain_filesort":
-            if explain_plan_contains(argument, database, "Extra", "Using filesort"):
-                should_print = True
-        elif options.filter == "query":
-            if command_type == "Query":
-                should_print = True
-        elif options.filter == "connection":
-            if command_type in ["Connect", "Quit"]:
-                should_print = True
+        if options.filter_explain_contains:
+            should_print = explain_plan_any_contains(argument, database, options.filter_explain_contains)
+        elif options.filter_explain_fullscan:
+            should_print = explain_plan_contains(argument, database, "type", "ALL")
+        elif options.filter_explain_indexscan:
+            should_print = explain_plan_contains(argument, database, "type", "index")
+        elif options.filter_explain_temporary:
+            should_print = explain_plan_contains(argument, database, "Extra", "Using temporary")
+        elif options.filter_explain_filesort:
+            should_print = explain_plan_contains(argument, database, "Extra", "Using filesort")
+        elif options.filter_explain_fulljoin:
+            should_print = explain_plan_contains(argument, database, "Extra", "Using join buffer")
+        elif options.filter_query:
+            should_print = (command_type == "Query")
+        elif options.filter_connection:
+            should_print = (command_type in ["Connect", "Quit"])
         else:
-            exit_with_error("Unknown filter value: %s" % options.filter)
-
+            # No filtering. So just print everything
+            should_print = True
+            
         if should_print:
             print "%s\t%s\t%s\t%s\t%s\t%s" % (event_time, user_host, thread_id, server_id, command_type, argument)
             sys.stdout.flush()
@@ -267,13 +303,20 @@ def hook_general_log():
     create_shadow_table()
     try:
         while time.time() - start_time < options.timeout_minutes*60:
-            rotate_general_log_table()
-            if not originally_used_log_tables:
-                truncate_slow_log_table()
-            dump_general_log_snapshot()
+            try:
+                rotate_general_log_table()
+                if not originally_used_log_tables:
+                    truncate_slow_log_table()
+                dump_general_log_snapshot()
+            except Exception, err:
+                if options.debug:
+                    traceback.print_exc()
+                print err
             time.sleep(options.sleep_time)
     except KeyboardInterrupt:
         # Catch a Ctrl-C. We still want to restore defaults, most probably disabling general log.
+        pass
+    except:
         pass
         
     drop_shadow_tables()
@@ -302,6 +345,10 @@ try:
         num_rotates = 0
         originally_used_log_tables = False
         database_per_connection_map = {}
+        
+        general_log_original_setting = None
+        log_output_original_setting = None
+        cached_explain_plan = None
         
         hook_general_log()
     except Exception, err:
