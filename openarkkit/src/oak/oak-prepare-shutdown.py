@@ -144,7 +144,7 @@ def prepare_shutdown():
     set_innodb_max_dirty_pages_pct(0)
     # Iterate until no improvement is made for max_succesive_non_improvements seconds, 
     # or until the number of dirty pages reaches 0, which is optimal.
-    while (num_succesive_non_improvements < max_succesive_non_improvements) and (innodb_buffer_pool_pages_dirty > 0):
+    while (num_succesive_non_improvements < max_succesive_non_improvements) and (min_innodb_buffer_pool_pages_dirty > 0):
         time.sleep(1)
         innodb_buffer_pool_pages_dirty = get_innodb_buffer_pool_pages_dirty()
         if innodb_buffer_pool_pages_dirty < min_innodb_buffer_pool_pages_dirty:
