@@ -26,7 +26,7 @@ import warnings
 from optparse import OptionParser
 
 def parse_options():
-    usage = "usage: oak-prepare-shutdown [options]"
+    usage = "usage: oak-hook-general-log [options]"
     parser = OptionParser(usage=usage)
     parser.add_option("-u", "--user", dest="user", default="", help="MySQL user")
     parser.add_option("-H", "--host", dest="host", default="localhost", help="MySQL host (default: localhost)")
