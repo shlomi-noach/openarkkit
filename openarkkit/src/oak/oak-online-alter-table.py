@@ -203,10 +203,10 @@ def get_shared_unique_key_columns(shared_unique_key_column_names_set):
             if column_names in shared_unique_key_column_names_set:
                 column_data_type = row["DATA_TYPE"].lower()
                 character_set_name = row["CHARACTER_SET_NAME"]
-                count_columns_in_unique_key = int(row["COUNT_COLUMN_IN_INDEX"])
                 verbose("- %s (%s)" % (column_names, column_data_type))
                 if unique_key_column_names is None:
                     unique_key_column_names = column_names
+                    count_columns_in_unique_key = int(row["COUNT_COLUMN_IN_INDEX"])
                     if character_set_name is not None:
                         unique_key_type = "text"
                     elif column_data_type in ["tinyint", "smallint", "int", "bigint"]:
