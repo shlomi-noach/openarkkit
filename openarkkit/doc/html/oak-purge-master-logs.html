@@ -1,3 +1,34 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	<title>oak-purge-master-logs: openark kit documentation</title>
+	<meta name="description" content="oak-purge-master-logs: openark kit" />
+	<meta name="keywords" content="oak-purge-master-logs: openark kit" />
+	<link rel="stylesheet" type="text/css" href="style.css" media="screen" />
+</head>
+
+<body>
+	<div id="main">
+		<div id="sidebarwrapper">
+			<h3>openark kit documentation</h1>
+			<div id="menu">
+				<ul>
+					<li class="page_item page-item-13"><a title="oak-apply-ri" href="oak-apply-ri.html">oak-apply-ri</a></li>
+					<li class="page_item page-item-17"><a title="oak-block-account" href="oak-block-account.html">oak-block-account</a></li>
+					<li class="page_item page-item-123 current_page_item"><a title="oak-chunk-update" href="oak-chunk-update.html">oak-chunk-update</a></li>
+					<li class="page_item page-item-19"><a title="oak-kill-slow-queries" href="oak-kill-slow-queries.html">oak-kill-slow-queries</a></li>
+					<li class="page_item page-item-21"><a title="oak-modify-charset" href="oak-modify-charset.html">oak-modify-charset</a></li>
+					<li class="page_item page-item-99"><a title="oak-online-alter-table" href="oak-online-alter-table.html">oak-online-alter-table</a></li>
+					<li class="page_item page-item-23"><a title="oak-purge-master-logs" href="oak-purge-master-logs.html">oak-purge-master-logs</a></li>
+					<li class="page_item page-item-25"><a title="oak-security-audit" href="oak-security-audit.html">oak-security-audit</a></li>
+					<li class="page_item page-item-31"><a title="oak-show-limits" href="oak-show-limits.html">oak-show-limits</a></li>
+					<li class="page_item page-item-33"><a title="oak-show-replication-status" href="oak-show-replication-status.html">oak-show-replication-status</a></li>
+				</ul>
+			</div>
+		</div>	
+		<div id="content">
+			<h1>oak-purge-master-logs</h1>	
 <h3>NAME</h3>
 oak-purge-master-logs: purge master logs, depending on the state of replicating slaves.
 <h3>SYNOPSIS</h3>
@@ -35,56 +66,56 @@ With --print-only, nothing is actually performed: instead, the PURGE statement i
 For this utility to run, the SUPER, REPLICATION CLIENT privileges are required.
 <h3>OPTIONS</h3>
 --ask-pass
-<p style="padding-left: 30px;">Prompt for password. The same password is expected to apply for the master and the slaves.</p>
+<p class="indent">Prompt for password. The same password is expected to apply for the master and the slaves.</p>
 
 --defaults-file=DEFAULTS_FILE
-<p style="padding-left: 30px;">Read from MySQL configuration file. Overrides --user, --password, --socket, --port.</p>
-<p style="padding-left: 30px;">The same user name &amp; password are expected to apply for the master and the slaves.</p>
-<p style="padding-left: 30px;">Configuration needs to be in the following format:</p>
+<p class="indent">Read from MySQL configuration file. Overrides --user, --password, --socket, --port.</p>
+<p class="indent">The same user name &amp; password are expected to apply for the master and the slaves.</p>
+<p class="indent">Configuration needs to be in the following format:</p>
 
-<p style="padding-left: 30px;"><strong>[client]
+<p class="indent"><strong>[client]
 user=my_user
 password=my_pass
 socket=/tmp/mysql.sock
 port=3306</strong>
 
 -f, --flush-logs
-<p style="padding-left: 30px;">Perform FLUSH LOGS on startup</p>
+<p class="indent">Perform FLUSH LOGS on startup</p>
 
 -H HOST, --host=HOST
-<p style="padding-left: 30px;">MySQL master host (default: localhost)</p>
+<p class="indent">MySQL master host (default: localhost)</p>
 
 -n EXPECT_NUM_SLAVES, --expect-num-slaves=EXPECT_NUM_SLAVES
-<p style="padding-left: 30px;">Number of slaves to expect (default: 0). When --pro-slaves flag is specified, and less than expect-num-slaves slaves are found, master logs files are not purged.</p>
+<p class="indent">Number of slaves to expect (default: 0). When --pro-slaves flag is specified, and less than expect-num-slaves slaves are found, master logs files are not purged.</p>
 
 -p PASSWORD, --password=PASSWORD
-<p style="padding-left: 30px;">MySQL password. The same password is expected to apply for the master and the slaves.</p>
+<p class="indent">MySQL password. The same password is expected to apply for the master and the slaves.</p>
 
 -P PORT, --port=PORT
-<p style="padding-left: 30px;">TCP/IP port (default: 3306)</p>
+<p class="indent">TCP/IP port (default: 3306)</p>
 
 --pro-master
-<p style="padding-left: 30px;">Force purging of logs, even if slaves are not up to date and will cease to replicate (this may ensure that disk space on master does not run out).</p>
-<p style="padding-left: 30px;">See also: --pro-slaves together with --pro-master</p>
+<p class="indent">Force purging of logs, even if slaves are not up to date and will cease to replicate (this may ensure that disk space on master does not run out).</p>
+<p class="indent">See also: --pro-slaves together with --pro-master</p>
 
 --pro-slaves
-<p style="padding-left: 30px;">Do not purge master logs which are not replicated by all slaves. This will ensure that even if slaves are lagging far behind, replication is not broken: master will keep all required logs to maintain replication for all slaves.</p>
-<p style="padding-left: 30px;">Together with --pro-master: master logs may be purged only as long as there is at least one slave whose replication will not break.</p>
+<p class="indent">Do not purge master logs which are not replicated by all slaves. This will ensure that even if slaves are lagging far behind, replication is not broken: master will keep all required logs to maintain replication for all slaves.</p>
+<p class="indent">Together with --pro-master: master logs may be purged only as long as there is at least one slave whose replication will not break.</p>
 
 -r RETAIN_LOGS, --retain-logs=RETAIN_LOGS
-<p style="padding-left: 30px;">Number of logs to retain on master (default: 5). The utility will keep at least that many logs files on master.</p>
+<p class="indent">Number of logs to retain on master (default: 5). The utility will keep at least that many logs files on master.</p>
 
 --sentinel=SENTINEL_FILE
-<p style="padding-left: 30px;">When the given file exists, oak-purge-master-logs exits without doing anything. Default: /tmp/oak-purge-master-logs.sentinel</p>
+<p class="indent">When the given file exists, oak-purge-master-logs exits without doing anything. Default: /tmp/oak-purge-master-logs.sentinel</p>
 
 --skip-show-slave-hosts
-<p style="padding-left: 30px;">When SHOW SLAVE HOSTS returns rows, these are considered the only slave hosts. Otherwise slaves are found looking at SHOW PROCESSLIST. With --skip-show-slave-hosts, only SHOW PROCESSLIST is used.</p>
+<p class="indent">When SHOW SLAVE HOSTS returns rows, these are considered the only slave hosts. Otherwise slaves are found looking at SHOW PROCESSLIST. With --skip-show-slave-hosts, only SHOW PROCESSLIST is used.</p>
 
 -S SOCKET, --socket=SOCKET
-<p style="padding-left: 30px;">MySQL socket file. Only applies when host is localhost</p>
+<p class="indent">MySQL socket file. Only applies when host is localhost</p>
 
 -u USER, --user=USER
-<p style="padding-left: 30px;">MySQL user. The same user is expected to apply for the master and the slaves.</p>
+<p class="indent">MySQL user. The same user is expected to apply for the master and the slaves.</p>
 
 <h3>ENVIRONMENT</h3>
 Requires MySQL 5.0 or newer, python 2.3 or newer.
@@ -97,13 +128,27 @@ or
 oak-show-replication-status
 <h3>LICENSE</h3>
 This tool is released under the BSD license.
-<blockquote>Copyright (c) 2008, Shlomi Noach
+<blockquote><pre>Copyright (c) 2008 - 2010, Shlomi Noach
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
 * Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
 * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 * Neither the name of the organization nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</blockquote>
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR 
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT 
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR 
+TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</pre>
+</blockquote>
 <h3>AUTHOR</h3>
 Shlomi Noach
+			<br/>
+			<br/>
+		</div>
+		<div class="clear">&nbsp;</div>
+		<div id="footnote" align="center">
+			<a href="">openark kit</a> documentation
+		</div>
+	</div>
+</body>
+</html>

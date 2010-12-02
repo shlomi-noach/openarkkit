@@ -2,9 +2,9 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-	<title>oak-show-grants: openark kit documentation</title>
-	<meta name="description" content="oak-show-grants: openark kit" />
-	<meta name="keywords" content="oak-show-grants: openark kit" />
+	<title>oak-get-slave-lag: openark kit documentation</title>
+	<meta name="description" content="oak-get-slave-lag: openark kit" />
+	<meta name="keywords" content="oak-get-slave-lag: openark kit" />
 	<link rel="stylesheet" type="text/css" href="style.css" media="screen" />
 </head>
 
@@ -28,35 +28,31 @@
 			</div>
 		</div>	
 		<div id="content">
-			<h1>oak-show-grants</h1>	
+			<h1>oak-get-slave-lag</h1>	
 <h3>NAME</h3>
-oak-show-grants: show accounts privileges in GRANT format
+oak-kill-slow-queries: terminate long running queries
 <h3>SYNOPSIS</h3>
-Show grants for all accounts:
-<blockquote>oak-show-grants</blockquote>
-Show grants for the 'webuser' user only:
-<blockquote>oak-show-grants --account-user=webuser</blockquote>
-Show grants for users on the localhost only:
-<blockquote>oak-show-grants --account-host=localhost</blockquote>
-Show grants for the 'webuser'@'192.168.0.120' account:
-<blockquote>oak-show-grants --account-user=webuser --account-host=192.168.0.120</blockquote>
-Show grants for the 'webuser' user only, provide connection parameters, prompt for password:
-<blockquote>oak-show-grants --user=root --ask-pass --socket=/tmp/mysql.sock --account-user=webuser</blockquote>
+Kill queries running longer than 60 seconds:
+<blockquote>oak-kill-slow-queries --slow-query-seconds=60</blockquote>
+Kill queries running longer than 60 seconds provided they're not invoked by user 'root':
+<blockquote>oak-kill-slow-queries --slow-query-seconds=60 --skip-root</blockquote>
+Kill queries running longer than 60 seconds provided they're not invoked by user 'myuser':
+<blockquote>oak-kill-slow-queries --slow-query-seconds=60 --skip-user=myuser</blockquote>
+Kill any query running longer than 60 seconds and which was invoked by user 'myuser'
+<blockquote>oak-kill-slow-queries --slow-query-seconds=60 --filter-user=myuser</blockquote>
+Same as above; doesn't perform the KILL, just prints out the statement:
+<blockquote>oak-kill-slow-queries --slow-query-seconds=60 --filter-user=myuser --print-only</blockquote>
+Same as above, short form; verbose:
+<blockquote>oak-kill-slow-queries -l 60 -f myuser --print-only -v</blockquote>
+Same as above, provide connection parameters, prompt for password:
+<blockquote>oak-kill-slow-queries --user=root --ask-pass --socket=/tmp/mysql.sock -l 60 -f myuser</blockquote>
 Same as above, use defaults file:
-<blockquote>oak-show-grants --defaults-file=/home/myuser/.my-oak.cnf --account-user=webuser</blockquote>
+<blockquote>oak-kill-slow-queries --defaults-file=/home/myuser/.my-oak.cnf -l 10 -f myuser</blockquote>
 <h3>DESCRIPTION</h3>
-oak-show-grants scans the mysql.users table to find all accounts, then lists the grants for each account.
+Terminate long running queries: this utility can terminate queries based on running time and invoking user. It utilizes MySQL's KILL QUERY command, which requires the SUPER privilege.
 
-The grants are presented in a GRANT format, which can later be executed on another machine.
-
-It is possible to filter out certain users, certain hosts or specific accounts.
+Queries can be terminated per given user, or can be skipped per given user. Only the queries get killed, the connections itself is not affected. Expect exceptions/errors on your client when the queries are killed.
 <h3>OPTIONS</h3>
---account-user=ACCOUNT_USER
-<p class="indent">A specific user for whom to show grants</p>
-
---account-host=ACCOUNT_HOST
-<p class="indent">A specific host for which to show grants</p>
-
 --ask-pass
 <p class="indent">Prompt for password.</p>
 
@@ -70,8 +66,17 @@ password=my_pass
 socket=/tmp/mysql.sock
 port=3306</strong>
 
+-f FILTER_USER, --filter-user=FILTER_USER
+<p class="indent">Only kill queries by by given user. Do not kill queries by other users</p>
+
 -H HOST, --host=HOST
 <p class="indent">MySQL host (default: localhost)</p>
+
+-l SLOW_QUERY_SECONDS, --slow-query-seconds=SLOW_QUERY_SECONDS
+<p class="indent">Number of seconds after which a query is considered slow</p>
+
+-k SKIP_USER, --skip-user=SKIP_USER
+<p class="indent">Do not kill queries invoked by given user</p>
 
 -p PASSWORD, --password=PASSWORD
 <p class="indent">MySQL password</p>
@@ -79,14 +84,23 @@ port=3306</strong>
 -P PORT, --port=PORT
 <p class="indent">TCP/IP port (default: 3306)</p>
 
+--print-only
+<p class="indent">Do not execute. Only print statement</p>
+
+-r, --skip-root
+<p class="indent">Do not kill queries by 'root' (same as --skip-user=root)</p>
+
 -S SOCKET, --socket=SOCKET
 <p class="indent">MySQL socket file. Only applies when host is localhost</p>
 
 -u USER, --user=USER
 <p class="indent">MySQL user</p>
 
+-v, --verbose
+<p class="indent">Print user friendly messages</p>
+
 <h3>ENVIRONMENT</h3>
-Requires MySQL 4.1 or newer, python 2.3 or newer.
+Requires MySQL 5.0 or newer, python 2.3 or newer.
 
 python-mysqldb must be installed in order to use this tool. You can
 <blockquote>apt-get install python-mysqldb</blockquote>

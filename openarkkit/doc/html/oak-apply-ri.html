@@ -1,11 +1,34 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
-  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-<meta http-equiv="content-type" content="text/html; charset=UTF-8"/>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	<title>oak-apply-ri: openark kit documentation</title>
+	<meta name="description" content="oak-apply-ri: openark kit" />
+	<meta name="keywords" content="oak-apply-ri: openark kit" />
+	<link rel="stylesheet" type="text/css" href="style.css" media="screen" />
 </head>
+
 <body>
+	<div id="main">
+		<div id="sidebarwrapper">
+			<h3>openark kit documentation</h1>
+			<div id="menu">
+				<ul>
+					<li class="page_item page-item-13"><a title="oak-apply-ri" href="oak-apply-ri.html">oak-apply-ri</a></li>
+					<li class="page_item page-item-17"><a title="oak-block-account" href="oak-block-account.html">oak-block-account</a></li>
+					<li class="page_item page-item-123 current_page_item"><a title="oak-chunk-update" href="oak-chunk-update.html">oak-chunk-update</a></li>
+					<li class="page_item page-item-19"><a title="oak-kill-slow-queries" href="oak-kill-slow-queries.html">oak-kill-slow-queries</a></li>
+					<li class="page_item page-item-21"><a title="oak-modify-charset" href="oak-modify-charset.html">oak-modify-charset</a></li>
+					<li class="page_item page-item-99"><a title="oak-online-alter-table" href="oak-online-alter-table.html">oak-online-alter-table</a></li>
+					<li class="page_item page-item-23"><a title="oak-purge-master-logs" href="oak-purge-master-logs.html">oak-purge-master-logs</a></li>
+					<li class="page_item page-item-25"><a title="oak-security-audit" href="oak-security-audit.html">oak-security-audit</a></li>
+					<li class="page_item page-item-31"><a title="oak-show-limits" href="oak-show-limits.html">oak-show-limits</a></li>
+					<li class="page_item page-item-33"><a title="oak-show-replication-status" href="oak-show-replication-status.html">oak-show-replication-status</a></li>
+				</ul>
+			</div>
+		</div>	
+		<div id="content">
+			<h1>oak-apply-ri</h1>	
 <h3>NAME</h3>
 oak-apply-ri: apply referential integrity on two columns with parent-child  relationship.
 <h3>SYNOPSIS</h3>
@@ -44,62 +67,62 @@ Actual delete or update can be a lengthy operation, and may lock the child table
 Integrity can be applied for columns of different schemas.
 <h3>OPTIONS</h3>
 -a ACTION, --action=ACTION
-<p style="padding-left: 30px;">Action to take on invalid (orphaned) rows. Can be either <span style="text-decoration: underline;">delete</span> or <span style="text-decoration: underline;">setnull.</span></p>
-<p style="padding-left: 30px;"><span style="text-decoration: underline;">delete</span> issues a DELETE on orphaned rows. <span style="text-decoration: underline;">setnull</span> issues an UPDATE on those rows, setting orphaned key to NULL.</p>
-<p style="padding-left: 30px;"><span style="text-decoration: underline;">setnull</span> is the default value. It is impossible to use 'setnull' for a NOT NULL child column.</p>
+<p class="indent">Action to take on invalid (orphaned) rows. Can be either <span style="text-decoration: underline;">delete</span> or <span style="text-decoration: underline;">setnull.</span></p>
+<p class="indent"><span style="text-decoration: underline;">delete</span> issues a DELETE on orphaned rows. <span style="text-decoration: underline;">setnull</span> issues an UPDATE on those rows, setting orphaned key to NULL.</p>
+<p class="indent"><span style="text-decoration: underline;">setnull</span> is the default value. It is impossible to use 'setnull' for a NOT NULL child column.</p>
 
 --ask-pass
-<p style="padding-left: 30px;">Prompt for password.</p>
+<p class="indent">Prompt for password.</p>
 
 --child=CHILD_COLUMN
-<p style="padding-left: 30px;">Fully qualified child (referencing) column. Must be in the following format: schema_name.table_name.column_name</p>
+<p class="indent">Fully qualified child (referencing) column. Must be in the following format: schema_name.table_name.column_name</p>
 
 -c CHUNK_SIZE, --chunk-size=CHUNK_SIZE
-<p style="padding-left: 30px;">Number of values to act on in chunks. This does not map directly to number of rows, but rather to number of distinct orphaned values.</p>
-<p style="padding-left: 30px;">Default chunk size is 0, which means all rows are deleted/updated in one operation</p>
+<p class="indent">Number of values to act on in chunks. This does not map directly to number of rows, but rather to number of distinct orphaned values.</p>
+<p class="indent">Default chunk size is 0, which means all rows are deleted/updated in one operation</p>
 
 --defaults-file=DEFAULTS_FILE
-<p style="padding-left: 30px;">Read from MySQL configuration file. Overrides --user, --password, --socket, --port.</p>
-<p style="padding-left: 30px;">Configuration needs to be in the following format:</p>
+<p class="indent">Read from MySQL configuration file. Overrides --user, --password, --socket, --port.</p>
+<p class="indent">Configuration needs to be in the following format:</p>
 
-<p style="padding-left: 30px;"><strong>[client]
+<p class="indent"><strong>[client]
 user=my_user
 password=my_pass
 socket=/tmp/mysql.sock
 port=3306</strong>
 
 -H HOST, --host=HOST
-<p style="padding-left: 30px;">MySQL host (default: localhost)</p>
+<p class="indent">MySQL host (default: localhost)</p>
 
 -l SAFETY_LEVEL, --safety-level=SAFETY_LEVEL
-<p style="padding-left: 30px;">Level of tests to make in order for action to take place. Valid values are:</p>
-<p style="padding-left: 30px;"><span style="text-decoration: underline;">none</span>: no tests are performed</p>
-<p style="padding-left: 30px;"><span style="text-decoration: underline;">normal</span> (default): columns are tested to be of identical date type</p>
-<p style="padding-left: 30px;"><span style="text-decoration: underline;">high</span>: smae as 'normal' + columns are tested to be of identical names</p>
+<p class="indent">Level of tests to make in order for action to take place. Valid values are:</p>
+<p class="indent"><span style="text-decoration: underline;">none</span>: no tests are performed</p>
+<p class="indent"><span style="text-decoration: underline;">normal</span> (default): columns are tested to be of identical date type</p>
+<p class="indent"><span style="text-decoration: underline;">high</span>: smae as 'normal' + columns are tested to be of identical names</p>
 
 --parent=PARENT_COLUMN
-<p style="padding-left: 30px;">Fully qualified parent (referenced) column. Must be in the following format: schema_name.table_name.column_name</p>
+<p class="indent">Fully qualified parent (referenced) column. Must be in the following format: schema_name.table_name.column_name</p>
 
 -p PASSWORD, --password=PASSWORD
-<p style="padding-left: 30px;">MySQL password</p>
+<p class="indent">MySQL password</p>
 
 -P PORT, --port=PORT
-<p style="padding-left: 30px;">TCP/IP port (default: 3306)</p>
+<p class="indent">TCP/IP port (default: 3306)</p>
 
 --print-only
-<p style="padding-left: 30px;">Do not execute. Only print statement</p>
+<p class="indent">Do not execute. Only print statement</p>
 
 --sleep=SLEEP_MILLIS
-<p style="padding-left: 30px;">Number of milliseconds to sleep between chunks. Default: 0</p>
+<p class="indent">Number of milliseconds to sleep between chunks. Default: 0</p>
 
 -S SOCKET, --socket=SOCKET
-<p style="padding-left: 30px;">MySQL socket file. Only applies when host is localhost</p>
+<p class="indent">MySQL socket file. Only applies when host is localhost</p>
 
 -u USER, --user=USER
-<p style="padding-left: 30px;">MySQL user</p>
+<p class="indent">MySQL user</p>
 
 -v, --verbose
-<p style="padding-left: 30px;">Print user friendly messages</p>
+<p class="indent">Print user friendly messages</p>
 
 <h3>ENVIRONMENT</h3>
 Requires MySQL 5.0 or newer, python 2.3 or newer.
@@ -111,15 +134,27 @@ or
 <h3>SEE ALSO</h3>
 <h3>LICENSE</h3>
 This tool is released under the BSD license.
-<blockquote>Copyright (c) 2008, Shlomi Noach
+<blockquote><pre>Copyright (c) 2008 - 2010, Shlomi Noach
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
 * Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
 * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 * Neither the name of the organization nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</blockquote>
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR 
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT 
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR 
+TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</pre>
+</blockquote>
 <h3>AUTHOR</h3>
 Shlomi Noach
+			<br/>
+			<br/>
+		</div>
+		<div class="clear">&nbsp;</div>
+		<div id="footnote" align="center">
+			<a href="">openark kit</a> documentation
+		</div>
+	</div>
 </body>
 </html>
