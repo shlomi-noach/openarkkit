@@ -21,6 +21,7 @@ setup(
         "scripts/oak-online-alter-table",
         "scripts/oak-prepare-shutdown",
         "scripts/oak-purge-master-logs",
+        "scripts/oak-repeat-query",
         "scripts/oak-security-audit",
         "scripts/oak-show-limits",
         "scripts/oak-show-replication-status",
