@@ -44,6 +44,8 @@ def parse_options():
     parser.add_option("", "--filter-explain-temporary", dest="filter_explain_temporary", action="store_true", default=False, help="Only output queries where execution plan indicates use of temporary tables")
     parser.add_option("", "--filter-explain-filesort", dest="filter_explain_filesort", action="store_true", default=False, help="Only output queries where execution plan indicates filesort")
     parser.add_option("", "--filter-explain-fulljoin", dest="filter_explain_fulljoin", action="store_true", default=False, help="Only output queries where execution plan indicates full join")
+    parser.add_option("", "--filter-explain-rows-exceed", dest="filter_explain_rows_exceed", type="int", default=None, help="Only output queries where some path in the execution plan expects more than given number of rows scanned")
+    parser.add_option("", "--filter-explain-total-rows-exceed", dest="filter_explain_total_rows_exceed", type="int", default=None, help="Only output queries where execution plan expects total number of rows scanned")
     parser.add_option("", "--filter-query", dest="filter_query", action="store_true", default=False, help="Only output queries")
     parser.add_option("", "--include-existing", dest="include_existing", action="store_true", default=False, help="Include possibly pre-existing entries in the general log table (default: disabled)")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
@@ -108,6 +110,9 @@ def get_rows(query):
 
 
 def get_explain_plan(query, database):
+    if not query.lower().strip().startswith("select"):
+        return None
+
     if database:
         act_query("USE %s" % database)
     explain_query = "EXPLAIN %s" % query
@@ -124,10 +129,10 @@ def get_cached_explain_plan(query, database):
 
 
 def explain_plan_any_contains(query, database, search_value):
-    if not query.lower().strip().startswith("select"):
+    explain_plan = get_cached_explain_plan(query, database)
+    if not explain_plan:
         return False
 
-    explain_plan = get_cached_explain_plan(query, database)
     for explain_row in explain_plan:
         existing_values = ["%s" % value for value in explain_row.values() if value]
         concatenated_values = "\n".join(existing_values).lower()
@@ -137,13 +142,40 @@ def explain_plan_any_contains(query, database, search_value):
 
 
 def explain_plan_contains(query, database, explain_column, search_value):
-    if not query.lower().strip().startswith("select"):
+    explain_plan = get_explain_plan(query, database)
+    if not explain_plan:
         return False
 
-    explain_plan = get_explain_plan(query, database)
     for explain_row in explain_plan:
         if explain_row[explain_column] and explain_row[explain_column].find(search_value) >= 0:
             return True
+    return False
+
+
+def explain_plan_rows_exceed(query, database, num_rows):
+    explain_plan = get_explain_plan(query, database)
+    if not explain_plan:
+        return False
+
+    for explain_row in explain_plan:
+        explain_rows_value = int(explain_row["rows"]) 
+        if explain_rows_value > num_rows:
+            return True
+    return False
+
+
+def explain_plan_total_rows_exceed(query, database, num_rows):
+    explain_plan = get_explain_plan(query, database)
+    if not explain_plan:
+        return False
+
+    total_rows_value = 1
+    for explain_row in explain_plan:
+        explain_rows_value = int(explain_row["rows"])
+        total_rows_value = total_rows_value * explain_rows_value
+         
+    if total_rows_value > num_rows:
+        return True
     return False
 
 
@@ -282,6 +314,10 @@ def dump_general_log_snapshot():
             should_print = explain_plan_contains(argument, database, "Extra", "Using filesort")
         elif options.filter_explain_fulljoin:
             should_print = explain_plan_contains(argument, database, "Extra", "Using join buffer")
+        elif options.filter_explain_rows_exceed is not None:
+            should_print = explain_plan_rows_exceed(argument, database, options.filter_explain_rows_exceed)
+        elif options.filter_explain_total_rows_exceed is not None:
+            should_print = explain_plan_total_rows_exceed(argument, database, options.filter_explain_total_rows_exceed)
         elif options.filter_query:
             should_print = (command_type == "Query")
         elif options.filter_connection:
