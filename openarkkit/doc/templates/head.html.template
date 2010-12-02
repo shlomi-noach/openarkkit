@@ -1,0 +1,31 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	<title>toolname: openark kit documentation</title>
+	<meta name="description" content="toolname: openark kit" />
+	<meta name="keywords" content="toolname: openark kit" />
+	<link rel="stylesheet" type="text/css" href="style.css" media="screen" />
+</head>
+
+<body>
+	<div id="main">
+		<div id="sidebarwrapper">
+			<h3>openark kit documentation</h1>
+			<div id="menu">
+				<ul>
+					<li class="page_item page-item-13"><a title="oak-apply-ri" href="oak-apply-ri.html">oak-apply-ri</a></li>
+					<li class="page_item page-item-17"><a title="oak-block-account" href="oak-block-account.html">oak-block-account</a></li>
+					<li class="page_item page-item-123 current_page_item"><a title="oak-chunk-update" href="oak-chunk-update.html">oak-chunk-update</a></li>
+					<li class="page_item page-item-19"><a title="oak-kill-slow-queries" href="oak-kill-slow-queries.html">oak-kill-slow-queries</a></li>
+					<li class="page_item page-item-21"><a title="oak-modify-charset" href="oak-modify-charset.html">oak-modify-charset</a></li>
+					<li class="page_item page-item-99"><a title="oak-online-alter-table" href="oak-online-alter-table.html">oak-online-alter-table</a></li>
+					<li class="page_item page-item-23"><a title="oak-purge-master-logs" href="oak-purge-master-logs.html">oak-purge-master-logs</a></li>
+					<li class="page_item page-item-25"><a title="oak-security-audit" href="oak-security-audit.html">oak-security-audit</a></li>
+					<li class="page_item page-item-31"><a title="oak-show-limits" href="oak-show-limits.html">oak-show-limits</a></li>
+					<li class="page_item page-item-33"><a title="oak-show-replication-status" href="oak-show-replication-status.html">oak-show-replication-status</a></li>
+				</ul>
+			</div>
+		</div>	
+		<div id="content">
+			<h1>toolname</h1>	
