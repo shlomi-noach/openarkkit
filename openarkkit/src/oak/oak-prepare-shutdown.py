@@ -123,6 +123,12 @@ def set_innodb_max_dirty_pages_pct(value):
     act_query(query)
 
 
+def get_global_variable(variable_name):
+    row = get_row("SHOW GLOBAL VARIABLES LIKE '%s'" % variable_name);
+    value = row["Value"]
+    return value
+
+
 def prepare_shutdown():
     if get_slave_open_temp_tables() > 0 and not slave_is_running():
         exit_with_error("Slave_open_temp_tables detected though slave is not running; this tool will not start the slave, since it's not it's job.")
@@ -136,24 +142,31 @@ def prepare_shutdown():
             start_slave()
             verbose("Slave stopped, but there were %d slave_open_temp_tables. Slave started; will try again" % slave_open_temp_tables)
             time.sleep(1)
+            
+    original_innodb_max_dirty_pages_pct = int(get_global_variable("innodb_max_dirty_pages_pct"))
 
     num_succesive_non_improvements = 0
     max_succesive_non_improvements = 10
     min_innodb_buffer_pool_pages_dirty = get_innodb_buffer_pool_pages_dirty()
     verbose("innodb_buffer_pool_pages_dirty: %d" % min_innodb_buffer_pool_pages_dirty)
     set_innodb_max_dirty_pages_pct(0)
-    # Iterate until no improvement is made for max_succesive_non_improvements seconds, 
-    # or until the number of dirty pages reaches 0, which is optimal.
-    while (num_succesive_non_improvements < max_succesive_non_improvements) and (min_innodb_buffer_pool_pages_dirty > 0):
-        time.sleep(1)
-        innodb_buffer_pool_pages_dirty = get_innodb_buffer_pool_pages_dirty()
-        if innodb_buffer_pool_pages_dirty < min_innodb_buffer_pool_pages_dirty:
-            num_succesive_non_improvements = 0
-            min_innodb_buffer_pool_pages_dirty = innodb_buffer_pool_pages_dirty
-            verbose("Down to %d" % min_innodb_buffer_pool_pages_dirty)
-        else:
-            num_succesive_non_improvements += 1
-            verbose("No improvement from %d" % min_innodb_buffer_pool_pages_dirty)
+    try:
+        # Iterate until no improvement is made for max_succesive_non_improvements seconds, 
+        # or until the number of dirty pages reaches 0, which is optimal.
+        while (num_succesive_non_improvements < max_succesive_non_improvements) and (min_innodb_buffer_pool_pages_dirty > 0):
+            time.sleep(1)
+            innodb_buffer_pool_pages_dirty = get_innodb_buffer_pool_pages_dirty()
+            if innodb_buffer_pool_pages_dirty < min_innodb_buffer_pool_pages_dirty:
+                num_succesive_non_improvements = 0
+                min_innodb_buffer_pool_pages_dirty = innodb_buffer_pool_pages_dirty
+                verbose("Down to %d" % min_innodb_buffer_pool_pages_dirty)
+            else:
+                num_succesive_non_improvements += 1
+                verbose("No improvement from %d" % min_innodb_buffer_pool_pages_dirty)
+    except KeyboardInterrupt:
+        # Catch a Ctrl-C. Restore original settings
+        set_innodb_max_dirty_pages_pct(original_innodb_max_dirty_pages_pct)
+        exit_with_error("Ctrl-C hit. Terminating")
     verbose("Found no improvement for %d successive attempts. Will now terminate" % max_succesive_non_improvements)
 
 
