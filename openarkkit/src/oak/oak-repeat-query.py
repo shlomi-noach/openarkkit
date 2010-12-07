@@ -37,10 +37,10 @@ def parse_options():
     parser.add_option("--ask-pass", action="store_true", dest="prompt_password", help="Prompt for password")
     parser.add_option("-P", "--port", dest="port", type="int", default=3306, help="TCP/IP port (default: 3306)")
     parser.add_option("-S", "--socket", dest="socket", default="/var/run/mysqld/mysql.sock", help="MySQL socket file. Only applies when host is localhost")
-    parser.add_option("-d", "--database", dest="database", help="Database name (required unless query uses fully qualified table names)")
+    parser.add_option("-d", "--database", dest="database", help="Database name (required)")
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
-    parser.add_option("-e", "--execute", dest="execute_query", help="Query (UPDATE or DELETE) to execute, which contains a chunk placeholder (required)")
-    parser.add_option("-s", "--sleep-time", dest="sleep_time", type="int", default=1, help="Number of seconds between log polling (default: 1)")
+    parser.add_option("-e", "--execute", dest="execute_query", help="Query to execute (required)")
+    parser.add_option("-s", "--sleep-time", dest="sleep_time", type="int", default=0, help="Number of milliseconds to sleep between query executions (default: 0)")
     parser.add_option("", "--max-iterations", dest="max_iterations", type="int", default=None, help="Maximum number of iterations to execute")
     parser.add_option("", "--max-seconds", dest="max_seconds", type="int", default=None, help="Maximum number of seconds (clock time) to run")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
@@ -136,8 +136,9 @@ def repeat_query():
                     return
                 
             if options.sleep_time:
-                verbose("Will sleep for %.2f seconds" % (options.sleep_time,))
-                time.sleep(options.sleep_time)
+                sleep_seconds = options.sleep_time/1000.0
+                verbose("Will sleep for %.2f seconds" % sleep_seconds)
+                time.sleep(sleep_seconds)
     except KeyboardInterrupt:
         # Catch a Ctrl-C. We still want to cleanly close connections
         verbose("User interrupt")
@@ -162,7 +163,10 @@ try:
             database_name=options.database
 
         if not options.execute_query:
-            exit_with_error("No query defined")
+            exit_with_error("No query defined (use --execute)")
+
+        if not options.database:
+            exit_with_error("No database specified (use --database)")
             
         warnings.simplefilter("ignore", MySQLdb.Warning) 
         conn = open_connection()
