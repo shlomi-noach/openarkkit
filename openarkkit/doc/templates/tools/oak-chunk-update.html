@@ -5,14 +5,14 @@ Delete rows from world.City where population is small:
 <blockquote>oak-chunk-update --database=world --execute="DELETE FROM City WHERE Population &lt; 10000000 AND OAK_CHUNK(City)"</blockquote>
 Same as above, provide fully qualified table names:
 <blockquote>oak-chunk-update --execute="DELETE FROM world.City WHERE Population &lt; 10000000 AND OAK_CHUNK(world.City)"</blockquote>
-Same as above, use 1oo rows chunk size, verbose:
+Same as above, use <b>100</b> rows chunk size, verbose:
 <blockquote>oak-chunk-update --database=world --execute="DELETE FROM City WHERE Population &lt; 10000000 AND OAK_CHUNK(City)" --chunk-size=100 --verbose</blockquote>
 Same as above, print progress:
 <blockquote>oak-chunk-update --database=world --execute="DELETE FROM City WHERE Population &lt; 10000000 AND OAK_CHUNK(City)" --chunk-size=100 --verbose --print-progress</blockquote>
 Same as above, do not log to binary log:
 <blockquote>oak-chunk-update --database=world --execute="DELETE FROM City WHERE Population &lt; 10000000 AND OAK_CHUNK(City)" --chunk-size=100 --verbose --print-progress --no-log-bin</blockquote>
-Same as above, sleep for 10 milliseconds between chunks:
-<blockquote>oak-chunk-update --database=world --execute="DELETE FROM City WHERE Population &lt; 10000000 AND OAK_CHUNK(City)" --chunk-size=100 --sleep=100 --verbose</blockquote>
+Same as above, sleep for <b>200</b> milliseconds between chunks:
+<blockquote>oak-chunk-update --database=world --execute="DELETE FROM City WHERE Population &lt; 10000000 AND OAK_CHUNK(City)" --chunk-size=100 --sleep=200 --verbose</blockquote>
 Perform an UPDATE operation:
 <blockquote>oak-chunk-update --database=world --execute="UPDATE City SET Population = Population+1 WHERE OAK_CHUNK(City)"</blockquote>
 Perform a multi-table UPDATE operation, choose world.City as chunking table:
@@ -106,6 +106,8 @@ python-mysqldb must be installed in order to use this tool. You can
 or
 <blockquote>yum install mysql-python</blockquote>
 <h3>SEE ALSO</h3>
+<p>oak-repeat-query</p>
+
 <h3>LICENSE</h3>
 This tool is released under the BSD license.
 <blockquote><pre>Copyright (c) 2008 - 2010, Shlomi Noach
