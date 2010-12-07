@@ -7,6 +7,7 @@
 						<li><a title="oak-apply-ri" href="oak-apply-ri.html">oak-apply-ri</a></li>
 						<li><a title="oak-block-account" href="oak-block-account.html">oak-block-account</a></li>
 						<li><a title="oak-chunk-update" href="oak-chunk-update.html">oak-chunk-update</a></li>
+						<li><a title="oak-get-slave-lag" href="oak-get-slave-lag.html">oak-get-slave-lag</a></li>
 						<li><a title="oak-hook-general-log" href="oak-hook-general-log.html">oak-hook-general-log</a></li>
 						<li><a title="oak-kill-slow-queries" href="oak-kill-slow-queries.html">oak-kill-slow-queries</a></li>
 						<li><a title="oak-modify-charset" href="oak-modify-charset.html">oak-modify-charset</a></li>
