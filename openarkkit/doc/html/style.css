@@ -17,6 +17,15 @@ body {
 	margin-left: auto ;
 	margin-right: auto ;
 	margin-top: 20px;
+	margin-bottom: 20px;
+}
+#header {
+	border-bottom:1px solid #E0E0E0;
+	margin-bottom:20px;
+	padding-bottom:10px;
+	background:#ffffff;
+}
+#contentwrapper {
 	background:#f7f7f7;
 }
 #content {
@@ -43,7 +52,8 @@ body {
 	padding: 0px;
 }
 #menu ul li {
-	margin-bottom: 4px;
+	margin-bottom: 8px;
+	border-bottom:1px solid #ffffff;
 }
 #menu ul li a {
 	font-size: 10pt;
@@ -56,18 +66,22 @@ body {
 }
 
 
+#header h1 {
+	color: #f26522;
+	font-size: 16pt;
+	text-decoration: none;
+	font-weight: normal;
+}
+#header div.subtitle {
+	color: #909090;
+	font-size: 10pt;
+	font-weight: bold;
+}
 
 #content a {
 	color: #f26522;
 	text-decoration: none;
 }
-#content h1 {
-	color: #f26522;
-	font-size: 14pt;
-	text-decoration: none;
-	font-weight: normal;
-}
-
 #content h2 {
 	display: inline;
 	color: #f26522;
@@ -76,11 +90,8 @@ body {
 	font-weight: normal;
 }
 #content h2 a {
-	color: #505050;
-	font-size: 14pt;
 }
 #content h2 a:hover {
-	color: #f26522;
 }
 blockquote {
         font-family:'Courier New', Courier, Monospace, Fixed;

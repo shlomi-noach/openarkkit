@@ -5,30 +5,18 @@
 	<title>oak-show-grants: openark kit documentation</title>
 	<meta name="description" content="oak-show-grants: openark kit" />
 	<meta name="keywords" content="oak-show-grants: openark kit" />
-	<link rel="stylesheet" type="text/css" href="style.css" media="screen" />
+	<link rel="stylesheet" type="text/css" href="style.css" />
 </head>
 
 <body>
 	<div id="main">
-		<div id="sidebarwrapper">
-			<h3>openark kit documentation</h1>
-			<div id="menu">
-				<ul>
-					<li class="page_item page-item-13"><a title="oak-apply-ri" href="oak-apply-ri.html">oak-apply-ri</a></li>
-					<li class="page_item page-item-17"><a title="oak-block-account" href="oak-block-account.html">oak-block-account</a></li>
-					<li class="page_item page-item-123 current_page_item"><a title="oak-chunk-update" href="oak-chunk-update.html">oak-chunk-update</a></li>
-					<li class="page_item page-item-19"><a title="oak-kill-slow-queries" href="oak-kill-slow-queries.html">oak-kill-slow-queries</a></li>
-					<li class="page_item page-item-21"><a title="oak-modify-charset" href="oak-modify-charset.html">oak-modify-charset</a></li>
-					<li class="page_item page-item-99"><a title="oak-online-alter-table" href="oak-online-alter-table.html">oak-online-alter-table</a></li>
-					<li class="page_item page-item-23"><a title="oak-purge-master-logs" href="oak-purge-master-logs.html">oak-purge-master-logs</a></li>
-					<li class="page_item page-item-25"><a title="oak-security-audit" href="oak-security-audit.html">oak-security-audit</a></li>
-					<li class="page_item page-item-31"><a title="oak-show-limits" href="oak-show-limits.html">oak-show-limits</a></li>
-					<li class="page_item page-item-33"><a title="oak-show-replication-status" href="oak-show-replication-status.html">oak-show-replication-status</a></li>
-				</ul>
-			</div>
-		</div>	
-		<div id="content">
-			<h1>oak-show-grants</h1>	
+		<div id="header">
+			<h1>openark kit documentation</h1>
+			<div class="subtitle">Common utilities for MySQL</div>
+		</div>
+		<div id="contentwrapper">
+			<div id="content">
+				<h2><a href="oak-show-grants.html">oak-show-grants</a></h2>	
 <h3>NAME</h3>
 oak-show-grants: show accounts privileges in GRANT format
 <h3>SYNOPSIS</h3>
@@ -64,11 +52,12 @@ It is possible to filter out certain users, certain hosts or specific accounts.
 <p class="indent">Read from MySQL configuration file. Overrides --user, --password, --socket, --port.</p>
 <p class="indent">Configuration needs to be in the following format:</p>
 
-<p class="indent"><strong>[client]
-user=my_user
-password=my_pass
-socket=/tmp/mysql.sock
+<p class="indent"><strong>[client]<br/>
+user=my_user<br/>
+password=my_pass<br/>
+socket=/tmp/mysql.sock<br/>
 port=3306</strong>
+</p>
 
 -H HOST, --host=HOST
 <p class="indent">MySQL host (default: localhost)</p>
@@ -109,12 +98,34 @@ TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF TH
 </blockquote>
 <h3>AUTHOR</h3>
 Shlomi Noach
-			<br/>
-			<br/>
-		</div>
-		<div class="clear">&nbsp;</div>
-		<div id="footnote" align="center">
-			<a href="">openark kit</a> documentation
+				<br/>
+			</div>
+			<div id="sidebarwrapper">
+				<div id="menu">
+					<h3>openark kit tools</h3>
+					<ul>
+						<li><a title="oak-apply-ri" href="oak-apply-ri.html">oak-apply-ri</a></li>
+						<li><a title="oak-block-account" href="oak-block-account.html">oak-block-account</a></li>
+						<li><a title="oak-chunk-update" href="oak-chunk-update.html">oak-chunk-update</a></li>
+						<li><a title="oak-get-slave-lag" href="oak-get-slave-lag.html">oak-get-slave-lag</a></li>
+						<li><a title="oak-hook-general-log" href="oak-hook-general-log.html">oak-hook-general-log</a></li>
+						<li><a title="oak-kill-slow-queries" href="oak-kill-slow-queries.html">oak-kill-slow-queries</a></li>
+						<li><a title="oak-modify-charset" href="oak-modify-charset.html">oak-modify-charset</a></li>
+						<li><a title="oak-online-alter-table" href="oak-online-alter-table.html">oak-online-alter-table</a></li>
+						<li><a title="oak-prepare-shutdown" href="oak-prepare-shutdown.html">oak-prepare-shutdown</a></li>
+						<li><a title="oak-purge-master-logs" href="oak-purge-master-logs.html">oak-purge-master-logs</a></li>
+						<li><a title="oak-repeat-query" href="oak-repeat-query.html">oak-repeat-query</a></li>
+						<li><a title="oak-security-audit" href="oak-security-audit.html">oak-security-audit</a></li>
+						<li><a title="oak-show-limits" href="oak-show-limits.html">oak-show-limits</a></li>
+						<li><a title="oak-show-replication-status" href="oak-show-replication-status.html">oak-show-replication-status</a></li>
+					</ul>
+				</div>
+			</div>	
+			<div class="clear">&nbsp;</div>
+			
+			<div id="footnote" align="center">
+				<a href="">openark kit</a> documentation
+			</div>
 		</div>
 	</div>
 </body>
