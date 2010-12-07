@@ -2,13 +2,13 @@
 oak-repeat-query: repeat query execution until some condition holds
 <h3>SYNOPSIS</h3>
 Repeat DELETE query until no more rows are affected, verbose:
-<blockquote>oak-repeat-query.py --user=root --socket=/tmp/mysql_sandbox5151.sock --database=sakila -e "DELETE FROM sakila.film_actor LIMIT 100" -v</blockquote>
+<blockquote>oak-repeat-query --user=root --socket=/tmp/mysql.sock --database=sakila -e "DELETE FROM sakila.film_actor LIMIT 100" -v</blockquote>
 Repeat UPDATE query until no more rows are affected, sleep <b>1</b> second between iterations, use defaults file:
-<blockquote>oak-repeat-query.py --defaults-file=/home/myuser/.my-oak.cnf --database=sakila -e "UPDATE film SET title = LEFT(title, 20) WHERE CHAR_LENGTH(title) > 20" --sleep-time=1000 -v</blockquote>
+<blockquote>oak-repeat-query --defaults-file=/home/myuser/.my-oak.cnf --database=sakila -e "UPDATE film SET title = LEFT(title, 20) WHERE CHAR_LENGTH(title) > 20" --sleep-time=1000 -v</blockquote>
 Repeat a query for <b>200</b> times, sleep <b>1</b> second between iterations:
-<blockquote>oak-repeat-query.py --defaults-file=/home/myuser/.my-oak.cnf --database=sakila -e "SELECT * FROM hot_table WHERE ts BETWEEN NOW() - INTERVAL 1 MINUTE AND NOW()" --sleep-time=1000 --max-iterations=200</blockquote>
+<blockquote>oak-repeat-query --defaults-file=/home/myuser/.my-oak.cnf --database=sakila -e "SELECT * FROM hot_table WHERE ts BETWEEN NOW() - INTERVAL 1 MINUTE AND NOW()" --sleep-time=1000 --max-iterations=200</blockquote>
 Repeat a query for <b>2</b> minutes, sleep <b>1</b> second between iterations:
-<blockquote>oak-repeat-query.py --defaults-file=/home/myuser/.my-oak.cnf --database=sakila -e "SELECT * FROM hot_table WHERE ts BETWEEN NOW() - INTERVAL 1 MINUTE AND NOW()" --sleep-time=1000 --max-seconds=120</blockquote>
+<blockquote>oak-repeat-query --defaults-file=/home/myuser/.my-oak.cnf --database=sakila -e "SELECT * FROM hot_table WHERE ts BETWEEN NOW() - INTERVAL 1 MINUTE AND NOW()" --sleep-time=1000 --max-seconds=120</blockquote>
 
 <h3>DESCRIPTION</h3>
 <p>This tool invokes given query until no more rows are affected, a number of iterations is reached, or certain time has passed.</p>

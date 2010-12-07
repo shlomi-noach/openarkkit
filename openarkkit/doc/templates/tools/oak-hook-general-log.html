@@ -2,24 +2,24 @@
 oak-hook-general-log: hook up and filter general log entries based on entry type or execution plan criteria.
 <h3>SYNOPSIS</h3>
 Hook up the general log and dump everything:
-<blockquote>oak-hook-general-log.py --user=root --socket=/tmp/mysql.sock</blockquote>
+<blockquote>oak-hook-general-log --user=root --socket=/tmp/mysql.sock</blockquote>
 Only dump connect/disconnect events:
-<blockquote>oak-hook-general-log.py --user=root --socket=/tmp/mysql.sock --filter-connection</blockquote>
+<blockquote>oak-hook-general-log --user=root --socket=/tmp/mysql.sock --filter-connection</blockquote>
 Same as above, use defaults file:
-<blockquote>oak-prepare-shutdown --defaults-file=/home/myuser/.my-oak.cnf --filter-connection</blockquote>
+<blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-connection</blockquote>
 Only dump queries which make for a full table scan:
-<blockquote>oak-prepare-shutdown --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-fullscan</blockquote>
+<blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-fullscan</blockquote>
 Only dump queries which make for a filesort:
-<blockquote>oak-prepare-shutdown --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-filesort</blockquote>
+<blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-filesort</blockquote>
 Only dump queries which make for an implicit temporary table creation:
-<blockquote>oak-prepare-shutdown --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-temporary</blockquote>
+<blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-temporary</blockquote>
 Only dump queries where the execution plan expects at least 100,000 rows in any of the tables:
-<blockquote>oak-prepare-shutdown --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-rows-exceed=100000</blockquote>
+<blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-rows-exceed=100000</blockquote>
 Only dump queries where the execution plan expects at least 1,000,000 rows combined:
-<blockquote>oak-prepare-shutdown --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-total-rows-exceed=1000000</blockquote>
+<blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-total-rows-exceed=1000000</blockquote>
 Only dump queries where the execution plan contains "log_time_and_origin_index" (e.g. looking for usage of given index). 
 This serves as a <i>grep</i> on the execution plan.
-<blockquote>oak-prepare-shutdown --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-contains="log_time_and_origin_index"</blockquote>
+<blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-contains="log_time_and_origin_index"</blockquote>
 
 <h3>DESCRIPTION</h3>
 <p><i>oak-hook-general-log</i> hooks up to a MySQL >= 5.1 server, and dumps general log to standard output, allowing for sophisticated filtering.</p>
