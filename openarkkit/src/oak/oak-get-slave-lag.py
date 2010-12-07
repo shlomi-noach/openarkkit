@@ -5,7 +5,7 @@
 #
 # Released under the BSD license
 #
-# Copyright (c) 2008, Shlomi Noach
+# Copyright (c) 2008 - 2010, Shlomi Noach
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
@@ -33,6 +33,7 @@ def parse_options():
     parser.add_option("-S", "--socket", dest="socket", default="/var/run/mysqld/mysql.sock", help="MySQL socket file. Only applies when host is localhost")
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
     parser.add_option("-e", "--error-if-more-than-seconds", dest="error_if_more_than_seconds", type="int", default=None, help="Return with error exit code if slave lag is more than given number of seconds (default: disabled)")
+    parser.add_option("", "--debug", dest="debug", action="store_true", help="Print stack trace on error")
     return parser.parse_args()
 
 
@@ -41,7 +42,7 @@ def verbose(message):
         print "-- %s" % message
 
 def print_error(message):
-    print >>sys.stderr, message
+    sys.stderr.write("-- ERROR: %s\n" % message)
 
 def open_connection():
     if options.defaults_file:
@@ -59,6 +60,7 @@ def open_connection():
             port = options.port,
             unix_socket = options.socket)
     return conn;
+
 
 def act_query(query):
     """
@@ -102,15 +104,19 @@ def get_slave_delay_seconds():
     return int(seconds_behind_master_value)
 
 
-def get_slave_delay():
-    seconds_behind_master = get_slave_delay_seconds()
-    if options.error_if_more_than_seconds is None:
-        print seconds_behind_master
-    elif seconds_behind_master is None or seconds_behind_master > options.error_if_more_than_seconds:
-        exit_with_error(seconds_behind_master)
-    else:    
-        print seconds_behind_master
-
+def get_slave_lag():
+    try:
+        seconds_behind_master = get_slave_delay_seconds()
+        if options.error_if_more_than_seconds is None:
+            print seconds_behind_master
+        elif seconds_behind_master is None or seconds_behind_master > options.error_if_more_than_seconds:
+            exit_with_error(seconds_behind_master)
+        else:    
+            print seconds_behind_master
+    except Exception, err:
+        if options.debug:
+            traceback.print_exc()
+        print err
 
 def exit_with_error(error_message):
     """
@@ -127,7 +133,7 @@ try:
         (options, args) = parse_options()
 
         conn = open_connection()
-        get_slave_delay()
+        get_slave_lag()
     except Exception, err:
         print err
 finally:
