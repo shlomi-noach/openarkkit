@@ -46,7 +46,7 @@ def parse_options():
     parser.add_option("--sleep", dest="sleep_millis", type="int", default=0, help="Number of milliseconds to sleep between chunks. Default: 0")
     parser.add_option("", "--debug", dest="debug", action="store_true", help="Print stack trace on error")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
-    parser.add_option("", "--print-progress", dest="print_progress", action="store_true", help="Show number of affected rows")
+    parser.add_option("", "--print-progress", dest="print_progress", action="store_true", help="Redundant. Use --verbose instead")
     return parser.parse_args()
 
 
@@ -467,11 +467,13 @@ def get_progress_and_eta_presentation(ratio_complete):
 
 def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
     """
-    Do a single chunk update. Main business goes here.
+    Do the chunk update loop. Main business goes here.
     """
     # Is there any range to work with, at all?
     if not range_exists:
         return
+    
+    start_time = time.time()
 
     query = """
         SELECT %s INTO %s
@@ -480,66 +482,75 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
 
     first_round = True
     total_num_affected_rows = 0
+    accumulated_work_time = 0;
     while not is_range_overflow(first_round):
-        # Different queries for first round and next rounds
-        if first_round:
-            execute_data_pass_query = first_data_pass_query
-        else:
-            execute_data_pass_query = rest_data_pass_query
-        if not execute_data_pass_query:
-            # Can happen when chunk-size=0, thus doing everything in one chunk
-            break
-
-        set_unique_key_range_end(first_round)
-        first_round = False
-
-        unique_key_range_start_values = [get_session_variable_value("unique_key_range_start_%d" % i) for i in range(0,count_columns_in_unique_key)]
-        unique_key_range_end_values = [get_session_variable_value("unique_key_range_end_%d" % i) for i in range(0,count_columns_in_unique_key)]
-
-        if unique_key_type == "integer":
-            ratio_complete_query = """
-                SELECT
-                    (@unique_key_range_start_0-@unique_key_min_value_0)/
-                    (@unique_key_max_value_0-@unique_key_min_value_0)
-                    AS ratio_complete
-                """
-            ratio_complete = float(get_row(ratio_complete_query)["ratio_complete"])
-            verbose("%s range (%s), (%s), %s" % (description, ",".join("%s" % val for val in unique_key_range_start_values), ",".join("%s" % val for val in unique_key_range_end_values), get_progress_and_eta_presentation(ratio_complete)))
-        elif unique_key_type == "temporal":
-            ratio_complete_query = """
-                SELECT
-                    TIMESTAMPDIFF(SECOND, @unique_key_min_value_0, @unique_key_range_start_0)/
-                    TIMESTAMPDIFF(SECOND, @unique_key_min_value_0, @unique_key_max_value_0)
-                    AS ratio_complete
-                """
-            ratio_complete = float(get_row(ratio_complete_query)["ratio_complete"])
-            verbose("%s range ('%s', '%s'), %s" % (description, ",".join(unique_key_range_start_values), ",".join(unique_key_range_end_values), get_progress_and_eta_presentation(ratio_complete)))
-        else:
-            verbose("%s range (%s), (%s), progress: N/A" % (description, ",".join(unique_key_range_start_values), ",".join(unique_key_range_end_values)))
-
-
-        retry_data_pass = True
-        while retry_data_pass:
-            try:
-                num_affected_rows = act_query(execute_data_pass_query)
-                total_num_affected_rows += num_affected_rows
-                retry_data_pass = False
-            except:
-                if options.skip_retry_chunk:                 
+        try:
+            # Different queries for first round and next rounds
+            if first_round:
+                execute_data_pass_query = first_data_pass_query
+            else:
+                execute_data_pass_query = rest_data_pass_query
+            if not execute_data_pass_query:
+                # Can happen when chunk-size=0, thus doing everything in one chunk
+                break
+    
+            set_unique_key_range_end(first_round)
+            first_round = False
+    
+            unique_key_range_start_values = [get_session_variable_value("unique_key_range_start_%d" % i) for i in range(0,count_columns_in_unique_key)]
+            unique_key_range_end_values = [get_session_variable_value("unique_key_range_end_%d" % i) for i in range(0,count_columns_in_unique_key)]
+    
+            if unique_key_type == "integer":
+                ratio_complete_query = """
+                    SELECT
+                        (@unique_key_range_start_0-@unique_key_min_value_0)/
+                        (@unique_key_max_value_0-@unique_key_min_value_0)
+                        AS ratio_complete
+                    """
+                ratio_complete = float(get_row(ratio_complete_query)["ratio_complete"])
+                verbose("%s range (%s), (%s), %s" % (description, ",".join("%s" % val for val in unique_key_range_start_values), ",".join("%s" % val for val in unique_key_range_end_values), get_progress_and_eta_presentation(ratio_complete)))
+            elif unique_key_type == "temporal":
+                ratio_complete_query = """
+                    SELECT
+                        TIMESTAMPDIFF(SECOND, @unique_key_min_value_0, @unique_key_range_start_0)/
+                        TIMESTAMPDIFF(SECOND, @unique_key_min_value_0, @unique_key_max_value_0)
+                        AS ratio_complete
+                    """
+                ratio_complete = float(get_row(ratio_complete_query)["ratio_complete"])
+                verbose("%s range ('%s', '%s'), %s" % (description, ",".join(unique_key_range_start_values), ",".join(unique_key_range_end_values), get_progress_and_eta_presentation(ratio_complete)))
+            else:
+                verbose("%s range (%s), (%s), progress: N/A" % (description, ",".join(unique_key_range_start_values), ",".join(unique_key_range_end_values)))
+    
+    
+            retry_data_pass = True
+            while retry_data_pass:
+                try:
+                    query_start_time = time.time()
+                    num_affected_rows = act_query(execute_data_pass_query)
+                    accumulated_work_time += (time.time() - query_start_time)
+                    total_num_affected_rows += num_affected_rows
                     retry_data_pass = False
-        if options.print_progress:
-            verbose("+ Affected rows: %d" % num_affected_rows)
-        if num_affected_rows == 0 and options.terminate_on_not_found:
-            verbose("+ Will now terminate due to unfound rows")
-            break;
-
-        set_unique_key_next_range_start()
-
-        if options.sleep_millis > 0:
-            sleep_seconds = options.sleep_millis/1000.0
-            verbose("Will sleep for %s seconds" % sleep_seconds)
-            time.sleep(sleep_seconds)
-    verbose("%s range 100%% complete. Number of rows: %s" % (description, total_num_affected_rows))
+                except:
+                    if options.skip_retry_chunk:                 
+                        retry_data_pass = False
+            time_now = time.time()
+            elapsed_seconds = round(time_now - start_time, 1)
+            verbose("+ Rows: %d affected, %d accumulating; seconds: %s elapsed; %s executed" % (num_affected_rows, total_num_affected_rows, elapsed_seconds, round(accumulated_work_time, 2)))
+            if num_affected_rows == 0 and options.terminate_on_not_found:
+                verbose("+ Will now terminate due to unfound rows")
+                break;
+    
+            set_unique_key_next_range_start()
+    
+            if options.sleep_millis > 0:
+                sleep_seconds = options.sleep_millis/1000.0
+                verbose("+ Will sleep for %s seconds" % sleep_seconds)
+                time.sleep(sleep_seconds)
+        except KeyboardInterrupt:
+            # Catch a Ctrl-C. We still want to cleanly close connections
+            verbose("User interrupt")
+            break
+    verbose("%s range complete. Affected rows: %s" % (description, total_num_affected_rows))
 
 
 def chunk_update():
