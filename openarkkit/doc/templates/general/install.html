@@ -1,0 +1,51 @@
+<p><i>openark kit</i> is available in the following flavors:</p>
+
+<ul>
+	<li>.deb package</li>
+	<li>.rpm package</li>
+	<li>python install package</li>
+</ul>
+
+<p>To use <i>openark kit</i>, you must have the python (>= 2.3) and the <i>python-mysql</i> module installed.</p>
+
+<p>On any reasonably recent Linux distribution, python (>= 2.3) should already be installed. 
+However, the python-mysql driver does not come installed by default on all common Linux distros. 
+Recent RedHat, Fedora, CentOS should include it by default.</p>
+
+<p>On Debian, Ubuntu and derived distros, one can install the <i>python-mysql</i> module with:</p>
+
+<blockquote><pre>
+sudo apt-get install python-mysqldb
+</pre></blockquote>
+
+<p>On RedHat, CentOS and derived distros, one can:</p>
+<blockquote><pre>
+yum install MySQL-python
+</pre></blockquote>
+<p>For other distros, BSD, etc, please refer to the <i>python-mysql</i> README file.</p>
+
+<h3>Installing openark kit</h3>
+
+<p>Using .deb package:</p>
+
+<blockquote><pre>
+sudo dpkg -i openark-kit-###.deb
+</pre></blockquote>
+
+<p>Using .rpm package:</p>
+
+<blockquote><pre>
+sudo rpm -i openark-kit-###-1.noarch.rpm
+</pre></blockquote>
+
+<p>Using python package (you must have <i>python-distutils</i>):</p>
+
+<blockquote><pre>
+tar xzfv openark-kit-###.tar.gz
+cd openark-kit-###
+sudo python setup.py install
+</pre></blockquote>
+
+<h3>Installed files</h3>
+<p>Installed files are the <i>openark kit</i> tools, e.g. <i>oak-chunk-update</i>, <i>oak-hook-general-log</i>. 
+After installation these files should be on your path.</p>

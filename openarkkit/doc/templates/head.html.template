@@ -2,9 +2,9 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-	<title>toolname: openark kit documentation</title>
-	<meta name="description" content="toolname: openark kit" />
-	<meta name="keywords" content="toolname: openark kit" />
+	<title>pagetitle: openark kit documentation</title>
+	<meta name="description" content="pagetitle: openark kit" />
+	<meta name="keywords" content="pagetitle: openark kit" />
 	<link rel="stylesheet" type="text/css" href="style.css" />
 </head>
 
@@ -16,4 +16,4 @@
 		</div>
 		<div id="contentwrapper">
 			<div id="content">
-				<h2><a href="toolname.html">toolname</a></h2>	
+				<h2><a href="pagename.html">pagetitle</a></h2>	
