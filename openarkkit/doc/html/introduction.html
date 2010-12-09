@@ -2,9 +2,9 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-	<title>oak-show-charset: openark kit documentation</title>
-	<meta name="description" content="oak-show-charset: openark kit" />
-	<meta name="keywords" content="oak-show-charset: openark kit" />
+	<title>introduction: openark kit documentation</title>
+	<meta name="description" content="introduction: openark kit" />
+	<meta name="keywords" content="introduction: openark kit" />
 	<link rel="stylesheet" type="text/css" href="style.css" />
 </head>
 
@@ -16,73 +16,37 @@
 		</div>
 		<div id="contentwrapper">
 			<div id="content">
-				<h2><a href="oak-show-charset.html">oak-show-charset</a></h2>	
-<h3>NAME</h3>
-oak-show-charset: show the character set and collation of a specific column, or of columns belonging to a table or database.
-<h3>SYNOPSIS</h3>
-Change the character set of the Name column from world.City to utf8 (apply default collation):
-<blockquote>oak-modify-charset world.City.Name utf8</blockquote>
-Change the character set of the Name column from world.City to utf8 and specify the collation:
-<blockquote>oak-modify-charset world.City.Name utf8 utf8_bin</blockquote>
-Same as above, do not actually perform the ALTER, just print it to standard output.
-<blockquote>oak-modify-charset --print-only world.City.Name utf8 utf8_bin</blockquote>
-As above, provide connection parameters, prompt for password:
-<blockquote>oak-modify-charset --user=root --ask-pass --socket=/tmp/mysql.sock world.City.Name utf8 utf8_bin</blockquote>
-As above, use defaults file:
-<blockquote>oak-modify-charset --defaults-file=/home/myuser/.my-oak.cnf world.City.Name utf8 utf8_bin</blockquote>
-<h3>DESCRIPTION</h3>
-oak-modify-charset enables a safe way to convert a column's character set, while retaining its other properties, such as its NULLability or default value. It uses ALTER TABLE to achieve this, and you must have the ALTER privilege on the given table to do so (usually reserved to user `root`).
+				<h2><a href="introduction.html">introduction</a></h2>	
 
-The tool verifies that the column is indeed of textual type (CHAR, VARCHAR, TEXT and variances), otherwise it reports an error.
-
-With --print-only, nothing is actually performed: instead, the ALTER TABLE statement is printed to standard output.
-<h3>OPTIONS</h3>
---ask-pass
-<p class="indent">Prompt for password.</p>
-
---defaults-file=DEFAULTS_FILE
-<p class="indent">Read from MySQL configuration file. Overrides --user, --password, --socket, --port.</p>
-<p class="indent">Configuration needs to be in the following format:</p>
-
-<p class="indent"><strong>[client]<br/>
-user=my_user<br/>
-password=my_pass<br/>
-socket=/tmp/mysql.sock<br/>
-port=3306</strong>
+<p>The openark kit is a set of utilities for MySQL. 
+They solve everyday maintenance tasks, which may be complicated or time consuming to work by hand.
 </p>
 
--H HOST, --host=HOST
-<p class="indent">MySQL host (default: localhost)</p>
+<p>The available tools are:</p>
+<ul>
+    <li><a href="oak-apply-ri.html">oak-apply-ri</a>: apply referential integrity on two columns with parent-child relationship.</li>
+    <li><a href="oak-block-account.html">oak-block-account</a>: block or release MySQL users accounts, disabling them or enabling them to login.</li>
+    <li><a href="oak-chunk-update.html">oak-chunk-update</a>: perform long, non-blocking UPDATE/DELETE operation in auto managed small chunks.</li>
+    <li><a href="oak-get-slave-lag.html">oak-get-slave-lag</a>: print slave replication lag and terminate with respective exit code.</li>
+    <li><a href="oak-hook-general-log.html">oak-hook-general-log</a>: hook up and filter general log entries based on entry type or execution plan criteria.</li>
+    <li><a href="oak-kill-slow-queries.html">oak-kill-slow-queries</a>: terminate long running queries.</li>
+    <li><a href="oak-modify-charset.html">oak-modify-charset</a>: change the character set (and collation) of a textual column.</li>
+    <li><a href="oak-online-alter-table.html">oak-online-alter-table</a>: perform a non-blocking ALTER TABLE operation.</li>
+    <li><a href="oak-prepare-shutdown.html">oak-prepare-shutdown</a>: make for a fast and safe MySQL shutdown.</li>
+    <li><a href="oak-purge-master-logs.html">oak-purge-master-logs</a>: purge master logs, depending on the state of replicating slaves.</li>
+    <li><a href="oak-repeat-query.html">oak-repeat-query</a>: repeat query execution until some condition holds.</li>
+    <li><a href="oak-security-audit.html">oak-security-audit</a>: audit accounts, passwords, privileges and other security settings.</li>
+    <li><a href="oak-show-limits.html">oak-show-limits</a>: show AUTO_INCREMENT “free space”.</li>
+    <li><a href="oak-show-replication-status.html">oak-show-replication-status</a>: show how far behind are replicating slaves on a given master.</li>
+</ul>
 
--p PASSWORD, --password=PASSWORD
-<p class="indent">MySQL password</p>
+<p>
+All tools are coded in Python, and require Python 2.3 or newer, and the python-mysqldb driver. 
+Some tools require MySQL 5.0 or higher; see the docs for each tool.
+</p>
 
--P PORT, --port=PORT
-<p class="indent">TCP/IP port (default: 3306)</p>
-
---print-only
-<p class="indent">Do not execute. Only print statement</p>
-
--S SOCKET, --socket=SOCKET
-<p class="indent">MySQL socket file. Only applies when host is localhost</p>
-
--u USER, --user=USER
-<p class="indent">MySQL user</p>
-
--v, --verbose
-<p class="indent">Print user friendly messages</p>
-
-<h3>ENVIRONMENT</h3>
-Requires MySQL 5.0 or newer, python 2.3 or newer.
-
-python-mysqldb must be installed in order to use this tool. You can
-<blockquote>apt-get install python-mysqldb</blockquote>
-or
-<blockquote>yum install mysql-python</blockquote>
-<h3>SEE ALSO</h3>
-oak-modify-charset
 <h3>LICENSE</h3>
-This tool is released under the BSD license.
+The openark kit is released under the <a href="http://www.opensource.org/licenses/bsd-license.php">BSD license</a>.
 <blockquote><pre>Copyright (c) 2008 - 2010, Shlomi Noach
 All rights reserved.
 

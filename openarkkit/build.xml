@@ -120,21 +120,39 @@
 	</target>
 
 	<target name="doc">		
-		<foreach param="tooldoc_filename" target="tooldocfile">
+		<foreach param="tooldoc_filename" target="tooldoc">
 			<path>
 				<fileset dir="${doc.templates.dir}/tools">
 			    	<include name="*.html"/>
 				</fileset>
 			</path>
 		</foreach>		
+		<foreach param="generaldoc_filename" target="generaldoc">
+			<path>
+				<fileset dir="${doc.templates.dir}/general">
+			    	<include name="*.html"/>
+				</fileset>
+			</path>
+		</foreach>		
 	</target>
-	<target name="tooldocfile">		
+	<target name="tooldoc">		
 		<basename property="doc_basename" file="${tooldoc_filename}"/>
 		<basename property="toolname" file="${tooldoc_filename}" suffix=".html"/>
 		<echo message="Generating documentation for ${toolname} tool" /> 
 		<concat destfile="${doc.html.dir}/${doc_basename}">
 			<filelist dir="${doc.templates.dir}" files="head.html.template, ${tooldoc_filename}, tail.html.template"/>
 		</concat>
-		<replace file="${doc.html.dir}/${doc_basename}" token="toolname" value="${toolname}"/>
+		<replace file="${doc.html.dir}/${doc_basename}" token="pagetitle" value="${toolname}"/>
+		<replace file="${doc.html.dir}/${doc_basename}" token="pagename" value="${toolname}"/>
+	</target>
+	<target name="generaldoc">		
+		<basename property="doc_basename" file="${generaldoc_filename}"/>
+		<basename property="docname" file="${generaldoc_filename}" suffix=".html"/>
+		<echo message="Generating documentation for ${docname} file" /> 
+		<concat destfile="${doc.html.dir}/${doc_basename}">
+			<filelist dir="${doc.templates.dir}" files="head.html.template, ${generaldoc_filename}, tail.html.template"/>
+		</concat>
+		<replace file="${doc.html.dir}/${doc_basename}" token="pagetitle" value="${docname}"/>
+		<replace file="${doc.html.dir}/${doc_basename}" token="pagename" value="${docname}"/>
 	</target>
 </project>
