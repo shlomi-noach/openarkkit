@@ -34,7 +34,7 @@ def parse_options():
     parser.add_option("-S", "--socket", dest="socket", default="/var/run/mysqld/mysql.sock", help="MySQL socket file. Only applies when host is localhost")
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
     parser.add_option("-d", "--database", dest="database", help="Database name (required unless query uses fully qualified table names)")
-    parser.add_option("-e", "--execute", dest="execute_query", help="Query (UPDATE or DELETE) to execute, which contains a chunk placeholder (required)")
+    parser.add_option("-e", "--execute", dest="execute_query", help="Query to execute, which contains a chunk placeholder in the form of OAK_CHUNK(table_name) (required)")
     parser.add_option("-c", "--chunk-size", dest="chunk_size", type="int", default=1000, help="Number of rows to act on in chunks (default: 1000). 0 means all rows updated in one operation")
     parser.add_option("", "--start-with", dest="start_with", default=None, help="Assuming chunking on numeric field (e.g. AUTO_INCREMENT), start chunking from this value and onward. Either provide a constant or a query returning a single integer value.")
     parser.add_option("", "--end-with", dest="end_with", default=None, help="Assuming chunking on numeric field (e.g. AUTO_INCREMENT), end chunking with this value. Either provide a constant or a query returning a single integer value.")
