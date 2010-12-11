@@ -39,6 +39,7 @@ def parse_options():
     parser.add_option("-s", "--sleep-time", dest="sleep_time", type="int", default=1, help="Number of seconds between log polling (default: 1)")
     parser.add_option("", "--filter-connection", dest="filter_connection", action="store_true", default=False, help="Only output connect/disconnect entries")
     parser.add_option("", "--filter-explain-contains", dest="filter_explain_contains", default=None, help="Only output queries whose execution plan contains given text")
+    parser.add_option("", "--filter-explain-key", dest="filter_explain_key", default=None, help="Only output queries where given key is used (specify key_name or table_name.key_name)")
     parser.add_option("", "--filter-explain-fullscan", dest="filter_explain_fullscan", action="store_true", default=False, help="Only output queries where execution plan indicates full table scan")
     parser.add_option("", "--filter-explain-indexscan", dest="filter_explain_indexscan", action="store_true", default=False, help="Only output queries where execution plan indicates full index scan")
     parser.add_option("", "--filter-explain-temporary", dest="filter_explain_temporary", action="store_true", default=False, help="Only output queries where execution plan indicates use of temporary tables")
@@ -122,9 +123,8 @@ def get_explain_plan(query, database):
 
 def get_cached_explain_plan(query, database):
     global cached_explain_plan
-    if cached_explain_plan:
-        return cached_explain_plan
-    cached_explain_plan = get_explain_plan(query, database)
+    if not cached_explain_plan:
+        cached_explain_plan = get_explain_plan(query, database)
     return cached_explain_plan
 
 
@@ -142,7 +142,7 @@ def explain_plan_any_contains(query, database, search_value):
 
 
 def explain_plan_contains(query, database, explain_column, search_value):
-    explain_plan = get_explain_plan(query, database)
+    explain_plan = get_cached_explain_plan(query, database)
     if not explain_plan:
         return False
 
@@ -153,7 +153,7 @@ def explain_plan_contains(query, database, explain_column, search_value):
 
 
 def explain_plan_rows_exceed(query, database, num_rows):
-    explain_plan = get_explain_plan(query, database)
+    explain_plan = get_cached_explain_plan(query, database)
     if not explain_plan:
         return False
 
@@ -165,7 +165,7 @@ def explain_plan_rows_exceed(query, database, num_rows):
 
 
 def explain_plan_total_rows_exceed(query, database, num_rows):
-    explain_plan = get_explain_plan(query, database)
+    explain_plan = get_cached_explain_plan(query, database)
     if not explain_plan:
         return False
 
@@ -304,6 +304,16 @@ def dump_general_log_snapshot():
         should_print = False
         if options.filter_explain_contains:
             should_print = explain_plan_any_contains(argument, database, options.filter_explain_contains)
+        elif options.filter_explain_key:
+            # Expect either key_name or table_name.key_name
+            filter_explain_key_tokens = options.filter_explain_key.split(".")
+            if len(filter_explain_key_tokens) == 1:
+                should_print = explain_plan_contains(argument, database, "key", filter_explain_key_tokens[0])
+            elif len(filter_explain_key_tokens) == 2:
+                should_print = (explain_plan_contains(argument, database, "table", filter_explain_key_tokens[0]) 
+                    and explain_plan_contains(argument, database, "key", filter_explain_key_tokens[1])) 
+            else:
+                exit_with_error("unrecognized filter_explain_key format")
         elif options.filter_explain_fullscan:
             should_print = explain_plan_contains(argument, database, "type", "ALL")
         elif options.filter_explain_indexscan:
@@ -363,6 +373,12 @@ def exit_with_error(error_message):
     """
     Notify and exit.
     """
+    try:
+        drop_shadow_tables()
+        restore_original_log_settings()
+    except:
+        pass
+        
     print_error(error_message)
     exit(1)
 
