@@ -82,7 +82,7 @@
 		<exec dir="${debian.distribution.dir}" executable="dpkg-deb">
 			<arg value="--build"/>
 			<arg value="openark-kit"/>
-			<arg value="openark-kit-${svn.revision}.deb"/>
+			<arg value="openark-kit-${svn.revision}-1.deb"/>
 		</exec>
 	</target>
 
