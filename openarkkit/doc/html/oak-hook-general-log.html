@@ -32,13 +32,15 @@ Only dump queries which make for a filesort:
 <blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-filesort</blockquote>
 Only dump queries which make for an implicit temporary table creation:
 <blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-temporary</blockquote>
-Only dump queries where the execution plan expects at least 100,000 rows in any of the tables:
+Only dump queries where the execution plan expects at least <b>100,000</b> rows in any of the tables:
 <blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-rows-exceed=100000</blockquote>
-Only dump queries where the execution plan expects at least 1,000,000 rows combined:
+Only dump queries where the execution plan expects at least <b>1,000,000</b> rows combined:
 <blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-total-rows-exceed=1000000</blockquote>
-Only dump queries where the execution plan contains "log_time_and_origin_index" (e.g. looking for usage of given index). 
+Only dump queries where the execution plan uses given index (`first_name` index on `authors` table):
+<blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-key=actor.first_name</blockquote>
+Only dump queries where the execution plan contains given text anywhere (e.g. in key name, ref, etc.)
 This serves as a <i>grep</i> on the execution plan.
-<blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-contains="log_time_and_origin_index"</blockquote>
+<blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-contains=my_column_name</blockquote>
 
 <h3>DESCRIPTION</h3>
 <p><i>oak-hook-general-log</i> hooks up to a MySQL >= 5.1 server, and dumps general log to standard output, allowing for sophisticated filtering.</p>
@@ -133,6 +135,12 @@ port=3306</strong>
                         full index scan
 </p>
 
+--filter-explain-key=FILTER_EXPLAIN_KEY
+<p class="indent">
+                        Only output queries where given key is used (specify
+                        key_name or table_name.key_name)
+</p>
+ 
 --filter-explain-rows-exceed=FILTER_EXPLAIN_ROWS_EXCEED
 <p class="indent">
                         Only output queries where some path in the execution
