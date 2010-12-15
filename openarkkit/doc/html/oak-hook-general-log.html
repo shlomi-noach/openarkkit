@@ -201,6 +201,10 @@ python-mysqldb must be installed in order to use this tool. You can
 <blockquote>apt-get install python-mysqldb</blockquote>
 or
 <blockquote>yum install mysql-python</blockquote>
+<p>Please note that in MySQL versions &lt; <b>5.1.46</b> you may run into <a href="http://bugs.mysql.com/bug.php?id=49823">this bug</a>, in which MySQL 
+allows for invalid <b>general_log</b> CSV tables. You may wish to either upgrade your MySQL version or issue:</p>
+<blockquote>mysql&gt; ALTER TABLE mysql.general_log ENGINE=MyISAM;</blockquote>
+
 <h3>SEE ALSO</h3>
 <h3>LICENSE</h3>
 This tool is released under the BSD license.
