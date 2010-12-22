@@ -43,7 +43,8 @@ def parse_options():
     parser.add_option("", "--skip-lock-tables", dest="skip_lock_tables", action="store_true", default=False, help="Do not issue a LOCK TABLES READ. May be required when using queries within --start-with or --end-with")
     parser.add_option("", "--skip-retry-chunk", dest="skip_retry_chunk", action="store_true", default=False, help="Avoid retrying a chunk operation on error. Default: false")
     parser.add_option("", "--no-log-bin", dest="no_log_bin", action="store_true", help="Do not log to binary log (actions will not replicate)")
-    parser.add_option("--sleep", dest="sleep_millis", type="int", default=0, help="Number of milliseconds to sleep between chunks. Default: 0")
+    parser.add_option("", "--sleep", dest="sleep_millis", type="int", default=0, help="Number of milliseconds to sleep between chunks. Default: 0")
+    parser.add_option("", "--sleep-ratio", dest="sleep_ratio", type="float", default=0, help="Ratio of sleep time to execution time. Default: 0")
     parser.add_option("", "--debug", dest="debug", action="store_true", help="Print stack trace on error")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     parser.add_option("", "--print-progress", dest="print_progress", action="store_true", help="Redundant. Use --verbose instead")
@@ -522,12 +523,14 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
                 verbose("%s range (%s), (%s), progress: N/A" % (description, ",".join(unique_key_range_start_values), ",".join(unique_key_range_end_values)))
     
     
+            query_execution_time = 0
             retry_data_pass = True
             while retry_data_pass:
                 try:
                     query_start_time = time.time()
                     num_affected_rows = act_query(execute_data_pass_query)
-                    accumulated_work_time += (time.time() - query_start_time)
+                    query_execution_time = (time.time() - query_start_time)
+                    accumulated_work_time += query_execution_time
                     total_num_affected_rows += num_affected_rows
                     retry_data_pass = False
                 except:
@@ -542,9 +545,13 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
     
             set_unique_key_next_range_start()
     
+            sleep_seconds = None
             if options.sleep_millis > 0:
                 sleep_seconds = options.sleep_millis/1000.0
-                verbose("+ Will sleep for %s seconds" % sleep_seconds)
+            elif options.sleep_ratio > 0:
+                sleep_seconds = options.sleep_ratio * query_execution_time
+            if sleep_seconds:
+                verbose("+ Will sleep for %s seconds" % round(sleep_seconds, 2))
                 time.sleep(sleep_seconds)
         except KeyboardInterrupt:
             # Catch a Ctrl-C. We still want to cleanly close connections
