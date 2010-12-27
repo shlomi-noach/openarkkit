@@ -7,8 +7,8 @@ Only dump connect/disconnect events:
 <blockquote>oak-hook-general-log --user=root --socket=/tmp/mysql.sock --filter-connection</blockquote>
 Same as above, use defaults file:
 <blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-connection</blockquote>
-Only dump queries which make for a full table scan:
-<blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-fullscan</blockquote>
+Only dump queries which make for a full table scan <i>and</i> use the City table:
+<blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-fullscan --filter-explain-table=City</blockquote>
 Only dump queries which make for a filesort:
 <blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-filesort</blockquote>
 Only dump queries which make for an implicit temporary table creation:
@@ -64,6 +64,10 @@ entries with PROCESSLIST entries. There may still be mismatches, but on most sit
 <p>When asked to filter by execution plan criteria, <i>oak-hook-general-log</i> invokes an <b>EXPLAIN</b> query for each <b>SELECT</b> query encountered.
 This may further slow down your overall performance if execution plans are complicated. However, you should note it does not delay the execution of the query itself.
 In fact, the execution plan is calculated after the query is invoked.
+</p>
+
+<p>
+It is possible to specify multiple filter criteria. For a query to be logged, it must answer for <i>all</i> specified filters.
 </p>
 
 <h3>OPTIONS</h3>
@@ -128,6 +132,11 @@ port=3306</strong>
                         plan expects more than given number of rows scanned
 </p>
 
+--filter-explain-table=FILTER_EXPLAIN_TABLE
+<p class="indent">
+                        Only output queries where given table is used
+</p>
+
 --filter-explain-temporary
 <p class="indent">
                         Only output queries where execution plan indicates use
@@ -143,6 +152,11 @@ port=3306</strong>
 --filter-query        
 <p class="indent">
 						Only output queries
+</p>
+
+--filter-query-contains=FILTER_QUERY_CONTAINS
+<p class="indent">
+	Only consider queries containing given text
 </p>
 
 -H HOST, --host=HOST

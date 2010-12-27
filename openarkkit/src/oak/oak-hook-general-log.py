@@ -39,15 +39,17 @@ def parse_options():
     parser.add_option("-s", "--sleep-time", dest="sleep_time", type="int", default=1, help="Number of seconds between log polling (default: 1)")
     parser.add_option("", "--filter-connection", dest="filter_connection", action="store_true", default=False, help="Only output connect/disconnect entries")
     parser.add_option("", "--filter-explain-contains", dest="filter_explain_contains", default=None, help="Only output queries whose execution plan contains given text")
-    parser.add_option("", "--filter-explain-key", dest="filter_explain_key", default=None, help="Only output queries where given key is used (specify key_name or table_name.key_name)")
-    parser.add_option("", "--filter-explain-fullscan", dest="filter_explain_fullscan", action="store_true", default=False, help="Only output queries where execution plan indicates full table scan")
-    parser.add_option("", "--filter-explain-indexscan", dest="filter_explain_indexscan", action="store_true", default=False, help="Only output queries where execution plan indicates full index scan")
-    parser.add_option("", "--filter-explain-temporary", dest="filter_explain_temporary", action="store_true", default=False, help="Only output queries where execution plan indicates use of temporary tables")
     parser.add_option("", "--filter-explain-filesort", dest="filter_explain_filesort", action="store_true", default=False, help="Only output queries where execution plan indicates filesort")
     parser.add_option("", "--filter-explain-fulljoin", dest="filter_explain_fulljoin", action="store_true", default=False, help="Only output queries where execution plan indicates full join")
+    parser.add_option("", "--filter-explain-fullscan", dest="filter_explain_fullscan", action="store_true", default=False, help="Only output queries where execution plan indicates full table scan")
+    parser.add_option("", "--filter-explain-indexscan", dest="filter_explain_indexscan", action="store_true", default=False, help="Only output queries where execution plan indicates full index scan")
+    parser.add_option("", "--filter-explain-key", dest="filter_explain_key", default=None, help="Only output queries where given key is used (specify key_name or table_name.key_name)")
     parser.add_option("", "--filter-explain-rows-exceed", dest="filter_explain_rows_exceed", type="int", default=None, help="Only output queries where some path in the execution plan expects more than given number of rows scanned")
+    parser.add_option("", "--filter-explain-table", dest="filter_explain_table", default=None, help="Only output queries where given table is used")
+    parser.add_option("", "--filter-explain-temporary", dest="filter_explain_temporary", action="store_true", default=False, help="Only output queries where execution plan indicates use of temporary tables")
     parser.add_option("", "--filter-explain-total-rows-exceed", dest="filter_explain_total_rows_exceed", type="int", default=None, help="Only output queries where execution plan expects total number of rows scanned")
     parser.add_option("", "--filter-query", dest="filter_query", action="store_true", default=False, help="Only output queries")
+    parser.add_option("", "--filter-query-contains", dest="filter_query_contains", default=False, help="Only consider queries containing given text")
     parser.add_option("", "--include-existing", dest="include_existing", action="store_true", default=False, help="Include possibly pre-existing entries in the general log table (default: disabled)")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     parser.add_option("", "--debug", dest="debug", action="store_true", help="Print stack trace on error")
@@ -113,7 +115,6 @@ def get_rows(query):
 def get_explain_plan(query, database):
     if not query.lower().strip().startswith("select"):
         return None
-
     if database:
         act_query("USE %s" % database)
     explain_query = "EXPLAIN %s" % query
@@ -197,6 +198,12 @@ def get_global_variable(variable_name):
     row = get_row("SHOW GLOBAL VARIABLES LIKE '%s'" % variable_name);
     value = row["Value"]
     return value
+
+
+def get_table_engine(database_name, table_name):
+    row = get_row("SHOW TABLE STATUS FROM %s LIKE '%s'" % (database_name, table_name,));
+    engine = row["Engine"].lower()
+    return engine
 
 
 def get_log_output():
@@ -301,10 +308,15 @@ def dump_general_log_snapshot():
         if database_per_connection_map.has_key(thread_id):
             database = database_per_connection_map[thread_id]
 
-        should_print = False
-        if options.filter_explain_contains:
+        should_print = True
+        if options.filter_query_contains:
+            if not options.filter_query_contains in argument:
+                # We should altogether ignore this query
+                should_print = False
+
+        if options.filter_explain_contains and should_print:
             should_print = explain_plan_any_contains(argument, database, options.filter_explain_contains)
-        elif options.filter_explain_key:
+        if options.filter_explain_key and should_print:
             # Expect either key_name or table_name.key_name
             filter_explain_key_tokens = options.filter_explain_key.split(".")
             if len(filter_explain_key_tokens) == 1:
@@ -314,27 +326,26 @@ def dump_general_log_snapshot():
                     and explain_plan_contains(argument, database, "key", filter_explain_key_tokens[1])) 
             else:
                 exit_with_error("unrecognized filter_explain_key format")
-        elif options.filter_explain_fullscan:
+        if options.filter_explain_table and should_print:
+            should_print = explain_plan_contains(argument, database, "table", options.filter_explain_table)
+        if options.filter_explain_fullscan and should_print:
             should_print = explain_plan_contains(argument, database, "type", "ALL")
-        elif options.filter_explain_indexscan:
+        if options.filter_explain_indexscan and should_print:
             should_print = explain_plan_contains(argument, database, "type", "index")
-        elif options.filter_explain_temporary:
+        if options.filter_explain_temporary and should_print:
             should_print = explain_plan_contains(argument, database, "Extra", "Using temporary")
-        elif options.filter_explain_filesort:
+        if options.filter_explain_filesort and should_print:
             should_print = explain_plan_contains(argument, database, "Extra", "Using filesort")
-        elif options.filter_explain_fulljoin:
+        if options.filter_explain_fulljoin and should_print:
             should_print = explain_plan_contains(argument, database, "Extra", "Using join buffer")
-        elif options.filter_explain_rows_exceed is not None:
+        if options.filter_explain_rows_exceed is not None and should_print:
             should_print = explain_plan_rows_exceed(argument, database, options.filter_explain_rows_exceed)
-        elif options.filter_explain_total_rows_exceed is not None:
+        if options.filter_explain_total_rows_exceed is not None and should_print:
             should_print = explain_plan_total_rows_exceed(argument, database, options.filter_explain_total_rows_exceed)
-        elif options.filter_query:
-            should_print = (command_type == "Query")
-        elif options.filter_connection:
+        if options.filter_query and should_print:
+            should_print = (command_type in ["Query", "Execute"])
+        if options.filter_connection and should_print:
             should_print = (command_type in ["Connect", "Quit"])
-        else:
-            # No filtering. So just print everything
-            should_print = True
             
         if should_print:
             print "%s\t%s\t%s\t%s\t%s\t%s" % (event_time, user_host, thread_id, server_id, command_type, argument)
