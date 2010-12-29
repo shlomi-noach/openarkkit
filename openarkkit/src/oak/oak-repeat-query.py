@@ -41,6 +41,7 @@ def parse_options():
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
     parser.add_option("-e", "--execute", dest="execute_query", help="Query to execute (required)")
     parser.add_option("-s", "--sleep-time", dest="sleep_time", type="int", default=0, help="Number of milliseconds to sleep between query executions (default: 0)")
+    parser.add_option("", "--sleep-ratio", dest="sleep_ratio", type="float", default=0, help="Ratio of sleep time to execution time. Default: 0")
     parser.add_option("", "--max-iterations", dest="max_iterations", type="int", default=None, help="Maximum number of iterations to execute")
     parser.add_option("", "--max-seconds", dest="max_seconds", type="int", default=None, help="Maximum number of seconds (clock time) to run")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
@@ -109,23 +110,28 @@ def get_rows(query):
 def repeat_query():
     start_time = time.time()
     num_iterations = 0
+    accumulated_work_time = 0;
     try:
         while True:
+            verbose("Executing query...")
+            query_start_time = time.time()
+
             num_affected_rows = act_query(options.execute_query)
+
+            query_execution_time = (time.time() - query_start_time)
+            accumulated_work_time += query_execution_time
+            time_now = time.time()
+            elapsed_seconds = round(time_now - start_time, 1)
+
             num_iterations += 1
             
-            if num_affected_rows:
-                verbose("Affected rows: %d." % num_affected_rows)
-            else:
-                verbose("No rows affected")
+            verbose("+ Affected rows: %d; iterations complete: %d; seconds: %s elapsed, %s executed" % (num_affected_rows, num_iterations, elapsed_seconds, round(accumulated_work_time, 2)))
                 
             if options.max_iterations is not None:
                 if num_iterations >= options.max_iterations:
                     verbose("Max iterations (%d) reached. Terminating." % options.max_iterations)
                     return
             if options.max_seconds is not None:
-                time_now = time.time()
-                elapsed_seconds = time_now - start_time
                 if elapsed_seconds >= options.max_seconds:
                     verbose("Max seconds (%d) reached. Terminating." % options.max_seconds)
                     return
@@ -135,9 +141,13 @@ def repeat_query():
                     verbose("Terminating due to no rows affected")
                     return
                 
+            sleep_seconds = None
             if options.sleep_time:
                 sleep_seconds = options.sleep_time/1000.0
-                verbose("Will sleep for %.2f seconds" % sleep_seconds)
+            elif options.sleep_ratio > 0:
+                sleep_seconds = options.sleep_ratio * query_execution_time
+            if sleep_seconds:
+                verbose("+ Will sleep for %.2f seconds" % sleep_seconds)
                 time.sleep(sleep_seconds)
     except KeyboardInterrupt:
         # Catch a Ctrl-C. We still want to cleanly close connections
