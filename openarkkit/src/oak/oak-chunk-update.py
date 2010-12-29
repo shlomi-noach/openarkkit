@@ -466,6 +466,17 @@ def get_progress_and_eta_presentation(ratio_complete):
     return "progress: %d%%" % progress
 
 
+def sleep_after_chunk():
+    sleep_seconds = None
+    if options.sleep_millis > 0:
+        sleep_seconds = options.sleep_millis/1000.0
+    elif options.sleep_ratio > 0:
+        sleep_seconds = options.sleep_ratio * query_execution_time
+    if sleep_seconds:
+        verbose("+ Will sleep for %s seconds" % round(sleep_seconds, 2))
+        time.sleep(sleep_seconds)
+
+
 def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
     """
     Do the chunk update loop. Main business goes here.
@@ -534,6 +545,8 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
                     total_num_affected_rows += num_affected_rows
                     retry_data_pass = False
                 except:
+                    print_error("Failed chunk")
+                    sleep_after_chunk()
                     if options.skip_retry_chunk:                 
                         retry_data_pass = False
             time_now = time.time()
@@ -545,14 +558,7 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
     
             set_unique_key_next_range_start()
     
-            sleep_seconds = None
-            if options.sleep_millis > 0:
-                sleep_seconds = options.sleep_millis/1000.0
-            elif options.sleep_ratio > 0:
-                sleep_seconds = options.sleep_ratio * query_execution_time
-            if sleep_seconds:
-                verbose("+ Will sleep for %s seconds" % round(sleep_seconds, 2))
-                time.sleep(sleep_seconds)
+            sleep_after_chunk()
         except KeyboardInterrupt:
             # Catch a Ctrl-C. We still want to cleanly close connections
             verbose("User interrupt")
