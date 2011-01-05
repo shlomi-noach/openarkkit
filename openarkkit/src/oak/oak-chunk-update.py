@@ -466,7 +466,7 @@ def get_progress_and_eta_presentation(ratio_complete):
     return "progress: %d%%" % progress
 
 
-def sleep_after_chunk():
+def sleep_after_chunk(query_execution_time):
     sleep_seconds = None
     if options.sleep_millis > 0:
         sleep_seconds = options.sleep_millis/1000.0
@@ -533,9 +533,10 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
             else:
                 verbose("%s range (%s), (%s), progress: N/A" % (description, ",".join(unique_key_range_start_values), ",".join(unique_key_range_end_values)))
     
-    
+            num_affected_rows = 0
             query_execution_time = 0
             retry_data_pass = True
+            should_sleep_after_chunk = False
             while retry_data_pass:
                 try:
                     query_start_time = time.time()
@@ -543,12 +544,17 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
                     query_execution_time = (time.time() - query_start_time)
                     accumulated_work_time += query_execution_time
                     total_num_affected_rows += num_affected_rows
+                    should_sleep_after_chunk = True
                     retry_data_pass = False
-                except:
-                    print_error("Failed chunk")
-                    sleep_after_chunk()
+                except Exception, err:
+                    print_error("Failed chunk: %s" % err)
+                    sleep_after_chunk(1000)
                     if options.skip_retry_chunk:                 
                         retry_data_pass = False
+                        verbose("Will not retry same chunk again")
+                    else:
+                        should_sleep_after_chunk = True
+                        verbose("Retrying same chunk (may lead to infinite loop if problem is inherent to query). Use --skip-retry-chunk to avoid retrying")
             time_now = time.time()
             elapsed_seconds = round(time_now - start_time, 1)
             verbose("+ Rows: %d affected, %d accumulating; seconds: %s elapsed; %s executed" % (num_affected_rows, total_num_affected_rows, elapsed_seconds, round(accumulated_work_time, 2)))
@@ -558,7 +564,8 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
     
             set_unique_key_next_range_start()
     
-            sleep_after_chunk()
+            if should_sleep_after_chunk:
+                sleep_after_chunk(query_execution_time)
         except KeyboardInterrupt:
             # Catch a Ctrl-C. We still want to cleanly close connections
             verbose("User interrupt")
