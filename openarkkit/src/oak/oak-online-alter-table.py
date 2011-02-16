@@ -690,6 +690,10 @@ def get_progress_and_eta_presentation(elapsed_times, elapsed_time, ratio_complet
     return "progress: %d%%" % progress
 
 
+def to_string_list(list):
+    return ["%s" % val for val in list]
+
+
 def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
     # Is there any range to work with, at all?
     if not range_exists:
@@ -726,7 +730,7 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
                     AS ratio_complete
                 """
             ratio_complete = float(get_row(ratio_complete_query)["ratio_complete"])
-            verbose("%s range (%s), (%s), %s" % (description, ",".join("%s" % val for val in unique_key_range_start_values), ",".join(unique_key_range_end_values), get_progress_and_eta_presentation(elapsed_times, elapsed_time, ratio_complete)))
+            verbose("%s range (%s), (%s), %s" % (description, ",".join(to_string_list(unique_key_range_start_values)), ",".join(to_string_list(unique_key_range_end_values)), get_progress_and_eta_presentation(elapsed_times, elapsed_time, ratio_complete)))
         elif unique_key_type == "temporal":
             ratio_complete_query = """
                 SELECT
