@@ -21,6 +21,7 @@ import getpass
 import MySQLdb
 import time
 import re
+import sys
 from optparse import OptionParser
 
 def parse_options():
@@ -49,7 +50,7 @@ def verbose(message):
         print "-- %s" % message
 
 def print_error(message):
-    print "-- ERROR: %s" % message
+    sys.stderr.write("-- ERROR: %s\n" % message)
 
 def open_connection():
     verbose("Connecting to MySQL")
@@ -560,9 +561,7 @@ def get_multiple_columns_equality(columns, values):
     """
     if not columns:
         return ""
-    equalities = []
-    for i in range(0,len(columns)):
-        equalities.append(get_value_comparison(columns[i], values[i], "="))
+    equalities = ["(%s = %s)" % (column, value) for (column, value) in zip(columns, values)]
     return "(%s)" % " AND ".join(equalities)
 
 
