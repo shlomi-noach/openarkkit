@@ -21,6 +21,7 @@ import getpass
 import MySQLdb
 import time
 import re
+import sys
 import traceback
 from optparse import OptionParser
 
@@ -56,7 +57,7 @@ def verbose(message):
         print "-- %s" % message
 
 def print_error(message):
-    print "-- ERROR: %s" % message
+    sys.stderr.write("-- ERROR: %s\n" % message)
 
 def open_connection():
     if options.defaults_file:
@@ -548,7 +549,7 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
                     retry_data_pass = False
                 except Exception, err:
                     print_error("Failed chunk: %s" % err)
-                    sleep_after_chunk(1000)
+                    sleep_after_chunk(1)
                     if options.skip_retry_chunk:                 
                         retry_data_pass = False
                         verbose("Will not retry same chunk again")
@@ -610,7 +611,7 @@ def exit_with_error(error_message):
     Notify and exit.
     """
     print_error(error_message)
-    exit(1)
+    sys.exit(1)
 
 
 try:
