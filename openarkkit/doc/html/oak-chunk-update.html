@@ -28,8 +28,8 @@ Same as above, sleep for <b>200</b> milliseconds between chunks, verbose:
 <blockquote>oak-chunk-update --database=world --execute="DELETE FROM City WHERE Population &lt; 10000000 AND OAK_CHUNK(City)" --chunk-size=100 --sleep=200 --verbose</blockquote>
 Same as above, quit when no rows are affected: 
 <blockquote>oak-chunk-update --database=world --execute="DELETE FROM City WHERE Population &lt; 10000000 AND OAK_CHUNK(City)" --chunk-size=100 --sleep=200 --verbose --terminate-on-not-found</blockquote>
-Perform a multi-table UPDATE operation, choose world.City as chunking table:
-<blockquote>oak-chunk-update --execute="UPDATE City, Country SET City.District = 'unknown' WHERE City.CountryCode = Country.Code AND Country.Continent = 'Africa' AND OAK_CHUNK(City)"</blockquote>
+Perform a multi-table UPDATE operation, choose world.City as chunking table, sleep twice the query time:
+<blockquote>oak-chunk-update --execute="UPDATE City, Country SET City.District = 'unknown' WHERE City.CountryCode = Country.Code AND Country.Continent = 'Africa' AND OAK_CHUNK(City)" --sleep-ratio=2</blockquote>
 Same as above, avoid using INFORMATION_SCHEMA by specifying chunk key:
 <blockquote>oak-chunk-update --execute="UPDATE City, Country SET City.District = 'unknown' WHERE City.CountryCode = Country.Code AND Country.Continent = 'Africa' AND OAK_CHUNK(City)" --force-chunking-column=id:integer</blockquote>
 Same as above, specify constant start position and end position:
