@@ -210,7 +210,7 @@ def get_shared_unique_key_columns(shared_unique_key_column_names_set):
                     count_columns_in_unique_key = int(row["COUNT_COLUMN_IN_INDEX"])
                     if character_set_name is not None:
                         unique_key_type = "text"
-                    elif column_data_type in ["tinyint", "smallint", "int", "bigint"]:
+                    elif column_data_type in ["tinyint", "smallint", "mediumint", "int", "bigint"]:
                         unique_key_type = "integer"
                     elif column_data_type in ["time", "date", "timestamp", "datetime"]:
                         unique_key_type = "temporal"
