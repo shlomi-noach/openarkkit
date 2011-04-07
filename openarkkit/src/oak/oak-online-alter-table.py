@@ -425,6 +425,9 @@ def create_custom_triggers():
     shared_columns_listing = ", ".join(shared_columns)
     shared_columns_new_listing = ", ".join(["NEW.%s" % column_name for column_name in shared_columns])
 
+    # Reason for the DELETE in the AFTER UPDATE trigger is that the UPDATE query may 
+    # modify the columns used by the chunking index itself, in which case the REPLACE does not 
+    # remove the row from the ghost table.
     query = """
         CREATE TRIGGER %s.%s AFTER UPDATE ON %s.%s
         FOR EACH ROW
