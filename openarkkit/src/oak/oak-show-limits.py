@@ -81,7 +81,7 @@ def show_limits(conn):
 
         try:
             value_cursor = conn.cursor(MySQLdb.cursors.DictCursor)
-            value_cursor.execute("SELECT MAX(%s) AS max_value FROM `%s`.`%s`" % (column_name, schema_name, table_name))
+            value_cursor.execute("SELECT MAX(`%s`) AS max_value FROM `%s`.`%s`" % (column_name, schema_name, table_name))
             max_value = value_cursor.fetchone()['max_value']
             value_cursor.close()
             if max_value:
