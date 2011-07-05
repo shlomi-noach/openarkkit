@@ -856,7 +856,7 @@ def exit_with_error(error_message):
     print_error("Errors found. Initiating cleanup")
     cleanup()
     print_error(error_message)
-    exit(1)
+    sys.exit(1)
 
 
 try:
