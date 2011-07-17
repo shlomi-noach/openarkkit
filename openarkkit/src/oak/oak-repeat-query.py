@@ -22,6 +22,7 @@
 
 import getpass
 import MySQLdb
+import re
 import sys
 import time
 import traceback
@@ -113,7 +114,7 @@ def repeat_query():
     accumulated_work_time = 0;
     try:
         while True:
-            verbose("Executing query...")
+            verbose("Executing query; comment: %s" % query_comment)
             query_start_time = time.time()
 
             num_affected_rows = act_query(options.execute_query)
@@ -175,6 +176,12 @@ try:
         if not options.execute_query:
             exit_with_error("No query defined (use --execute)")
 
+        comment_regexp = "/\*(.*?)\*/"
+        query_comment_match = re.search(comment_regexp, options.execute_query)
+        query_comment = None
+        if query_comment_match:
+            query_comment = query_comment_match.group(1).strip()
+            
         if not options.database:
             exit_with_error("No database specified (use --database)")
             
