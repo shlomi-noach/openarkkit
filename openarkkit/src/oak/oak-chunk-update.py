@@ -512,7 +512,7 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
     
             unique_key_range_start_values = [get_session_variable_value("unique_key_range_start_%d" % i) for i in range(0,count_columns_in_unique_key)]
             unique_key_range_end_values = [get_session_variable_value("unique_key_range_end_%d" % i) for i in range(0,count_columns_in_unique_key)]
-    
+                
             if unique_key_type == "integer":
                 ratio_complete_query = """
                     SELECT
@@ -558,6 +558,9 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
                         verbose("Retrying same chunk (may lead to infinite loop if problem is inherent to query). Use --skip-retry-chunk to avoid retrying")
             time_now = time.time()
             elapsed_seconds = round(time_now - start_time, 1)
+    
+            if (query_comment):
+                verbose("+ Query comment: %s" % query_comment)
             verbose("+ Rows: %d affected, %d accumulating; seconds: %s elapsed; %s executed" % (num_affected_rows, total_num_affected_rows, elapsed_seconds, round(accumulated_work_time, 2)))
             if num_affected_rows == 0 and options.terminate_on_not_found:
                 verbose("+ Will now terminate due to unfound rows")
@@ -631,6 +634,12 @@ try:
         if not match:
             exit_with_error("Query must include the following token: 'OAK_CHUNK(table_name)', where table_name should be replaced with a table which consists of an AUTO_INCREMENT column by which chunks are made.")
 
+        comment_regexp = "/\*(.*?)\*/"
+        query_comment_match = re.search(comment_regexp, options.execute_query)
+        query_comment = None
+        if query_comment_match:
+            query_comment = query_comment_match.group(1).strip()
+            
         table_name_match = match.group(1).strip()
 
         database_name = None
