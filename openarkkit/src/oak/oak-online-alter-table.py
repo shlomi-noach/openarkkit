@@ -929,7 +929,7 @@ try:
 
             ghost_table_unique_key_names_set = get_possible_unique_key_column_names_set(ghost_table_name)
             if not original_table_unique_key_names_set:
-                exit_with_error("Aletered table must have a UNIQUE KEY on a single column")
+                exit_with_error("Altered table must have a UNIQUE KEY on a single column")
 
             shared_unique_key_column_names_set = original_table_unique_key_names_set.intersection(ghost_table_unique_key_names_set)
 
