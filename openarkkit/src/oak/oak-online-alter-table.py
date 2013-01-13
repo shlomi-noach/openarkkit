@@ -40,6 +40,7 @@ def parse_options():
     parser.add_option("-c", "--chunk-size", dest="chunk_size", type="int", default=1000, help="Number of rows to act on in chunks. Default: 1000")
     parser.add_option("-l", "--lock-chunks", action="store_true", dest="lock_chunks", default=False, help="Use LOCK TABLES for each chunk")
     parser.add_option("-N", "--skip-binlog", dest="skip_binlog", action="store_true", default=False, help="Disable binary logging")
+    parser.add_option("-r", "--max-lock-retries", type="int", dest="max_lock_retries", default="10", help="Maximum times to retry on deadlock or lock_wait_timeout. (default: 10; 0 is unlimited)")
     parser.add_option("--skip-delete-pass", dest="skip_delete_pass", action="store_true", default=False, help="Do not execute the DELETE data pass")
     parser.add_option("--sleep", dest="sleep_millis", type="int", default=0, help="Number of milliseconds to sleep between chunks. Default: 0")
     parser.add_option("", "--sleep-ratio", dest="sleep_ratio", type="float", default=0, help="Ratio of sleep time to execution time. Default: 0")
@@ -773,6 +774,7 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
             lock_tables_read()
             
         retry_data_pass = True
+        num_attempts = 0
         query_execution_time = 0
         while retry_data_pass:
             try:
@@ -784,7 +786,11 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
             except Exception, err:
                 print_error("Failed chunk: %s" % err)
                 sleep_after_chunk(1)
-                verbose("Retrying same chunk (may lead to infinite loop if problem is inherent to query)")
+                num_attempts += 1
+            if (num_attempts >= options.max_lock_retries) and (options.max_lock_retries > 0):
+                retry_data_pass = False
+            if retry_data_pass:
+                verbose("Retrying same chunk %s/%s" % (num_attempts, options.max_lock_retries))
             
         num_affected_rows = act_query(execute_data_pass_query)
         total_num_affected_rows += num_affected_rows
