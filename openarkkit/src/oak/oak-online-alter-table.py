@@ -39,6 +39,7 @@ def parse_options():
     parser.add_option("-a", "--alter", dest="alter_statement", help="Comma delimited ALTER statement details, excluding the 'ALTER TABLE t' itself")
     parser.add_option("-c", "--chunk-size", dest="chunk_size", type="int", default=1000, help="Number of rows to act on in chunks. Default: 1000")
     parser.add_option("-l", "--lock-chunks", action="store_true", dest="lock_chunks", default=False, help="Use LOCK TABLES for each chunk")
+    parser.add_option("-N", "--skip-binlog", dest="skip_binlog", action="store_true", default=False, help="Disable binary logging")
     parser.add_option("--skip-delete-pass", dest="skip_delete_pass", action="store_true", default=False, help="Do not execute the DELETE data pass")
     parser.add_option("--sleep", dest="sleep_millis", type="int", default=0, help="Number of milliseconds to sleep between chunks. Default: 0")
     parser.add_option("", "--sleep-ratio", dest="sleep_ratio", type="float", default=0, help="Ratio of sleep time to execution time. Default: 0")
@@ -927,6 +928,10 @@ try:
             exit_with_error("No database specified. Specify with fully qualified table name or with -d or --database")
 
         conn = open_connection()
+        if options.skip_binlog:
+            query = "SET SESSION SQL_LOG_BIN=0"
+            act_query(query)
+            verbose("Binary logging for session disabled")
 
         ghost_table_name = None
         if options.ghost:
