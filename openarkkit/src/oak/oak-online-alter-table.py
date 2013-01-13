@@ -39,7 +39,9 @@ def parse_options():
     parser.add_option("-a", "--alter", dest="alter_statement", help="Comma delimited ALTER statement details, excluding the 'ALTER TABLE t' itself")
     parser.add_option("-c", "--chunk-size", dest="chunk_size", type="int", default=1000, help="Number of rows to act on in chunks. Default: 1000")
     parser.add_option("-l", "--lock-chunks", action="store_true", dest="lock_chunks", default=False, help="Use LOCK TABLES for each chunk")
+    parser.add_option("--skip-delete-pass", dest="skip_delete_pass", action="store_true", default=False, help="Do not execute the DELETE data pass")
     parser.add_option("--sleep", dest="sleep_millis", type="int", default=0, help="Number of milliseconds to sleep between chunks. Default: 0")
+    parser.add_option("", "--sleep-ratio", dest="sleep_ratio", type="float", default=0, help="Ratio of sleep time to execution time. Default: 0")
     parser.add_option("--cleanup", dest="cleanup", action="store_true", default=False, help="Remove custom triggers, ghost table from possible previous runs")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", default=True, help="Print user friendly messages")
     parser.add_option("-q", "--quiet", dest="verbose", action="store_false", help="Quiet mode, do not verbose")
@@ -352,6 +354,7 @@ def get_table_columns(read_table_name):
         FROM INFORMATION_SCHEMA.COLUMNS
         WHERE TABLE_SCHEMA='%s'
             AND TABLE_NAME='%s'
+        ORDER BY ORDINAL_POSITION
         """ % (database_name, read_table_name)
     column_names = set([row["COLUMN_NAME"].lower() for row in get_rows(query)])
 
@@ -422,8 +425,8 @@ def create_custom_triggers():
     act_query(query)
     verbose("Created AD trigger")
 
-    shared_columns_listing = ", ".join(shared_columns)
-    shared_columns_new_listing = ", ".join(["NEW.%s" % column_name for column_name in shared_columns])
+    shared_columns_listing = ", ".join(["`%s`" % shared_column for shared_column in shared_columns])
+    shared_columns_new_listing = ", ".join(["NEW.`%s`" % column_name for column_name in shared_columns])
 
     # Reason for the DELETE in the AFTER UPDATE trigger is that the UPDATE query may 
     # modify the columns used by the chunking index itself, in which case the REPLACE does not 
@@ -654,6 +657,15 @@ def is_range_overflow(first_round):
     return range_overflow
 
 
+def is_range_degenerated():
+    query = """
+        SELECT (%s) >= (%s) AS range_degenerated
+        """ % (get_unique_key_range_start_variables(), get_unique_key_range_end_variables())
+    row = get_row(query)
+    range_degenerated = int(row["range_degenerated"])
+    return range_degenerated
+
+
 def get_eta_seconds(elapsed_times, ratio_complete):
     if not elapsed_times:
         return 0
@@ -694,6 +706,17 @@ def get_progress_and_eta_presentation(elapsed_times, elapsed_time, ratio_complet
 
 def to_string_list(list):
     return ["%s" % val for val in list]
+
+
+def sleep_after_chunk(query_execution_time):
+    sleep_seconds = None
+    if options.sleep_millis > 0:
+        sleep_seconds = options.sleep_millis/1000.0
+    elif options.sleep_ratio > 0:
+        sleep_seconds = options.sleep_ratio * query_execution_time
+    if sleep_seconds:
+        verbose("+ Will sleep for %s seconds" % round(sleep_seconds, 2))
+        time.sleep(sleep_seconds)
 
 
 def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
@@ -747,22 +770,37 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
 
         if options.lock_chunks:
             lock_tables_read()
+            
+        retry_data_pass = True
+        query_execution_time = 0
+        while retry_data_pass:
+            try:
+                query_start_time = time.time()
+                num_affected_rows = act_query(execute_data_pass_query)
+                total_num_affected_rows += num_affected_rows
+                query_execution_time = (time.time() - query_start_time)
+                retry_data_pass = False
+            except Exception, err:
+                print_error("Failed chunk: %s" % err)
+                sleep_after_chunk(1)
+                verbose("Retrying same chunk (may lead to infinite loop if problem is inherent to query)")
+            
         num_affected_rows = act_query(execute_data_pass_query)
         total_num_affected_rows += num_affected_rows
         if options.lock_chunks:
             unlock_tables()
 
+        if is_range_degenerated():
+            break
+        
         set_unique_key_next_range_start()
 
-        if options.sleep_millis > 0:
-            sleep_seconds = options.sleep_millis/1000.0
-            verbose("Will sleep for %s seconds" % sleep_seconds)
-            time.sleep(sleep_seconds)
+        sleep_after_chunk(query_execution_time)
     verbose("%s range 100%% complete. Number of rows: %s" % (description, total_num_affected_rows))
 
 
 def copy_data_pass():
-    shared_columns_listing = ", ".join(shared_columns)
+    shared_columns_listing = ", ".join(["`%s`" % shared_column for shared_column in shared_columns])
     
     # We generate two queries: 
     # one for first round (includes range start value, or >=),
@@ -947,7 +985,8 @@ try:
             unlock_tables()
 
             copy_data_pass()
-            delete_data_pass()
+            if not options.skip_delete_pass:
+                delete_data_pass()
 
             if options.ghost:
                 verbose("Ghost table creation completed. Note that triggers on %s.%s were not removed" % (database_name, original_table_name))
