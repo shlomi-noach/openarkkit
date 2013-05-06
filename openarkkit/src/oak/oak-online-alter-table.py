@@ -741,6 +741,7 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
 
     total_num_affected_rows = 0
     first_round = True
+    total_num_attempts = 0
     while not is_range_overflow(first_round):
         if first_round:
             execute_data_pass_query = first_data_pass_query
@@ -754,6 +755,8 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
         unique_key_range_start_values = [get_session_variable_value("unique_key_range_start_%d" % i) for i in range(0,count_columns_in_unique_key)]
         unique_key_range_end_values = [get_session_variable_value("unique_key_range_end_%d" % i) for i in range(0,count_columns_in_unique_key)]
 
+        if total_num_attempts % 20 == 0:
+            verbose("- Reminder: altering %s.%s: %s..." % (database_name, original_table_name, options.alter_statement[0:30])) 
         if unique_key_type == "integer":
             ratio_complete_query = """
                 SELECT
@@ -784,6 +787,7 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
         while retry_data_pass:
             try:
                 query_start_time = time.time()
+                total_num_attempts += 1
                 num_affected_rows = act_query(execute_data_pass_query)
                 total_num_affected_rows += num_affected_rows
                 query_execution_time = (time.time() - query_start_time)
