@@ -198,6 +198,7 @@ def get_shared_unique_key_columns(shared_unique_key_column_names_set):
 
     rows = get_possible_unique_key_columns(original_table_name)
 
+    original_table_unique_key_name = None
     unique_key_column_names = None
     unique_key_type = None
     count_columns_in_unique_key = None
@@ -211,6 +212,7 @@ def get_shared_unique_key_columns(shared_unique_key_column_names_set):
                 verbose("- %s (%s)" % (column_names, column_data_type))
                 if unique_key_column_names is None:
                     unique_key_column_names = column_names
+                    original_table_unique_key_name = row["INDEX_NAME"]
                     count_columns_in_unique_key = int(row["COUNT_COLUMN_IN_INDEX"])
                     if character_set_name is not None:
                         unique_key_type = "text"
@@ -221,7 +223,7 @@ def get_shared_unique_key_columns(shared_unique_key_column_names_set):
 
         verbose("Chosen unique key is '%s'" % unique_key_column_names)
 
-    return unique_key_column_names, count_columns_in_unique_key, unique_key_type
+    return unique_key_column_names, original_table_unique_key_name, count_columns_in_unique_key, unique_key_type
 
 
 def get_table_engine():
@@ -660,6 +662,9 @@ def is_range_overflow(first_round):
 
 
 def is_range_degenerated():
+    """
+    Contributed, see Issue 29: oak-online-alter-table stuck in an endless loop
+    """
     query = """
         SELECT (%s) >= (%s) AS range_degenerated
         """ % (get_unique_key_range_start_variables(), get_unique_key_range_end_variables())
@@ -791,9 +796,7 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
                 retry_data_pass = False
             if retry_data_pass:
                 verbose("Retrying same chunk %s/%s" % (num_attempts, options.max_lock_retries))
-            
-        num_affected_rows = act_query(execute_data_pass_query)
-        total_num_affected_rows += num_affected_rows
+
         if options.lock_chunks:
             unlock_tables()
 
@@ -819,14 +822,14 @@ def copy_data_pass():
         
     data_pass_queries = ["""
         INSERT IGNORE INTO %s.%s (%s)
-            (SELECT %s FROM %s.%s
+            (SELECT %s FROM %s.%s FORCE INDEX (%s)
             WHERE 
                 (%s
                 AND
                 %s)
             %s)
         """ % (database_name, ghost_table_name, shared_columns_listing,
-            shared_columns_listing, database_name, original_table_name,
+            shared_columns_listing, database_name, original_table_name, original_table_unique_key_name,
             get_multiple_columns_non_equality_comparison_by_names(unique_key_column_names, get_unique_key_range_start_variables(), ">", first_round),
             get_multiple_columns_non_equality_comparison_by_names(unique_key_column_names, get_unique_key_range_end_variables(), "<", True),
             engine_flags
@@ -888,10 +891,10 @@ def cleanup():
     """
     if conn:
         unlock_tables()
+        drop_custom_triggers()
         if not options.ghost:
             drop_table(ghost_table_name)
         drop_table(archive_table_name)
-        drop_custom_triggers()
 
 
 def exit_with_error(error_message):
@@ -985,7 +988,7 @@ try:
             if not shared_unique_key_column_names_set:
                 exit_with_error("Altered table must retain at least one unique key")
 
-            unique_key_column_names, count_columns_in_unique_key, unique_key_type = get_shared_unique_key_columns(shared_unique_key_column_names_set)
+            unique_key_column_names, original_table_unique_key_name, count_columns_in_unique_key, unique_key_type = get_shared_unique_key_columns(shared_unique_key_column_names_set)
             unique_key_column_names_list = unique_key_column_names.split(",")
 
             shared_columns = get_shared_columns()
