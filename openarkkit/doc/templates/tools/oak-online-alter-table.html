@@ -17,60 +17,75 @@ Perform ALTER in chunks of 5000 rows:
 <blockquote>oak-online-alter-table --table=world.City --alter="ADD KEY(Population)" --chunk-size=5000</blockquote>
 Perform ALTER in chunks of 5000 rows, sleep for 20 milliseconds between chunks:
 <blockquote>oak-online-alter-table --table=world.City --alter="ADD KEY(Population)" --chunk-size=5000 --sleep=20</blockquote>
+Perform ALTER, use sleep ratio of 2; sleep 2 seconds for every second spent working:
+<blockquote>oak-online-alter-table --table=world.City --alter="ADD KEY(Population)" --sleep-ratio=2</blockquote>
 Perform a cleanup for an aborted run:
 <blockquote>oak-online-alter-table --database=world --table=City --cleanup</blockquote>
 Provide connection parameters. Prompt for password:
 <blockquote>oak-online-alter-table --database=world --table=City --alter="ADD KEY(Population)" --user=root --ask-pass --socket=/tmp/mysql.sock</blockquote>
 Use a defaults file for connection parameters:
 <blockquote>oak-online-alter-table --database=world --table=City --alter="ADD KEY(Population)" --defaults-file=/home/myuser/.my-oak.cnf</blockquote>
+
 <h3>DESCRIPTION</h3>
-oak-online-alter-table allows for non blocking ALTER TABLE operations, table rebuilds and creating a table's ghost.
+<p>
+	oak-online-alter-table allows for non blocking ALTER TABLE operations, table rebuilds and creating a table's ghost.
+</p>
+<p>
+	To run this utility, the following requirements must be met:
+	<ul>
+		<li>The table has at least one single-column UNIQUE KEY<em></em></li>
+		<li>Altered table shares a single-column UNIQUE KEY with the original table<em></em></li>
+		<li>No ‘AFTER’ triggers are defined on the table (the utility creates its own triggers for the duration of the operation)</li>
+		<li>The table has no FOREIGN KEYs<em></em></li>
+		<li>Table name is no longer than 57 characters</li>
+	</ul>
+	The utility provides with three basic functionalities:
+	<ul>
+		<li>A non blocking ALTER TABLE operation: adding columns or keys, dropping columns or keys, modifying columns, converting table character set etc., are all supported, under the following restrictions:
+	<ul>
+		<li>ADD COLUMN (new column must have a default value)</li>
+		<li>DROP COLUMN (as long as there’s still a shared single-column UNIQUE KEY between the old table and the altered one)</li>
+		<li>MODIFY COLUMN (change type, including UNIQUE KEY columns)</li>
+		<li>ADD KEY (normal, unique, fulltext etc.)</li>
+		<li>DROP KEY (as long as there’s still a shared single-column UNIQUE KEY between the old table and the altered one)</li>
+		<li>Change ENGINE: works, but great care should be taken when dealing with non-transactional engines</li>
+		<li>Adding FOREIGN KEY constraints is possible</li>
+		<li>More… Not all ALTERS have been tested, e.g. CONVERT, partition handling…</li>
+	</ul>
+	</li>
+		<li>An empty ALTER, which rebuilds a table: potentially releasing disk space and organizing rows in a more optimized way on disk.</li>
+		<li>(May not be supported in future versions): Creating a live 'ghost' table, which is synchronized with the original table, as long as the following do not occur:
+	<ul>
+		<li>An ALTER TABLE on the original table</li>
+		<li>A TRUNCATE on the original table</li>
+		<li>LOAD DATA INFILE into the original table</li>
+		<li>OPTIMIZE on the original table</li>
+	</ul>
+	</li>
+	</ul>
+	While the utility runs, it is allowed to invoke INSERT, UPDATE, DELETE, REPLACE on the original table. It is not allowed to TRUNCATE, ALTER, REPAIR, OPTIMIZE or otherwise perform a table-wide operation on the original table.
+</p>
+<p>
+	The utility works with InnoDB tables, MyISAM tables, or otherwise any table-level locking storage engine (MEMORY, ARCHIVE). 
+</p>
+<p>
+	The utility works by creating a ghost table for the duration of the runtime, which is slowly synchronized with the original table. When the synchronization is complete, it takes place of the original table. To do this, the utility must create AFTER INSERT, AFTER UPDATE, AFTER DELETE triggers on the original table.
+</p>
 
-To run this utility, the following requirements must be met:
-<ul>
-	<li>The table has at least one single-column UNIQUE KEY<em></em></li>
-	<li>Altered table shares a single-column UNIQUE KEY with the original table<em></em></li>
-	<li>No ‘AFTER’ triggers are defined on the table (the utility creates its own triggers for the duration of the operation)</li>
-	<li>The table has no FOREIGN KEYs<em></em></li>
-	<li>Table name is no longer than 57 characters</li>
-</ul>
-The utility provides with three basic functionalities:
-<ul>
-	<li>A non blocking ALTER TABLE operation: adding columns or keys, dropping columns or keys, modifying columns, converting table character set etc., are all supported, under the following restrictions:
-<ul>
-	<li>ADD COLUMN (new column must have a default value)</li>
-	<li>DROP COLUMN (as long as there’s still a shared single-column UNIQUE KEY between the old table and the altered one)</li>
-	<li>MODIFY COLUMN (change type, including UNIQUE KEY columns)</li>
-	<li>ADD KEY (normal, unique, fulltext etc.)</li>
-	<li>DROP KEY (as long as there’s still a shared single-column UNIQUE KEY between the old table and the altered one)</li>
-	<li>Change ENGINE: works, but great care should be taken when dealing with non-transactional engines</li>
-	<li>Adding FOREIGN KEY constraints is possible</li>
-	<li>More… Not all ALTERS have been tested, e.g. CONVERT, partition handling…</li>
-</ul>
-</li>
-	<li>An empty ALTER, which rebuilds a table: potentially releasing disk space and organizing rows in a more optimized way on disk.</li>
-	<li>(May not be supported in future versions): Creating a live 'ghost' table, which is synchronized with the original table, as long as the following do not occur:
-<ul>
-	<li>An ALTER TABLE on the original table</li>
-	<li>A TRUNCATE on the original table</li>
-	<li>LOAD DATA INFILE into the original table</li>
-	<li>OPTIMIZE on the original table</li>
-</ul>
-</li>
-</ul>
-While the utility runs, it is allowed to invoke INSERT, UPDATE, DELETE, REPLACE on the original table. It is not allowed to TRUNCATE, ALTER, REPAIR, OPTIMIZE or otherwise perform a table-wide operation on the original table.
-
-The utility works with InnoDB tables, MyISAM tables, or otherwise any table-level locking storage engine (MEMORY, ARCHIVE). There is currently no support for PBXT or Falcon.
-
-The utility works by creating a ghost table for the duration of the runtime, which is slowly synchronized with the original table. When the synchronization is complete, it takes place of the original table. To do this, the utility must create AFTER INSERT, AFTER UPDATE, AFTER DELETE triggers on the original table.
-
-Synchronizing the ghost table with the original tables takes place in several steps. In one of those steps, data is copied from the original table to the ghost table. This is done in chunks of rows, the number of which is configurable using the <strong>chunk-size</strong> option. While a chunk is being copied, there is a read lock on the table (MyISAM, ARCHIVE, MEMORY) or on the rows contained in the chunk (InnoDB). The smaller the chunk - the faster the locks are removed, and the more concurrency is allowed; but also the longer it will take for the entire operation to complete.
-
-For write intensive application, it may be advisable to allow for pauses between chunks, so as to make as little impact as possible. This can be configured with the <strong>sleep</strong> option. While sleeping between chunks, no locks are placed.
-
-Even so, a performance impact is noticed while the application runs, and this is due to the triggers added on the table, and the propagation of DML statements to the ghost table.
-
-It is required to have enough disk space to accomodate the altered table (as in a normal ALTER TABLE). Only when the operation completes can there be a disk space regaining (depending on your storage engine and configuration).
+<p>
+	Synchronizing the ghost table with the original tables takes place in several steps. In one of those steps, data is copied from the original table to the ghost table. This is done in chunks of rows, the number of which is configurable using the <strong>chunk-size</strong> option. While a chunk is being copied, there is a read lock on the table (MyISAM, ARCHIVE, MEMORY) or on the rows contained in the chunk (InnoDB). The smaller the chunk - the faster the locks are removed, and the more concurrency is allowed; but also the longer it will take for the entire operation to complete.
+</p>	
+<p>
+	For write intensive application, it may be advisable to allow for pauses between chunks, 
+	so as to make as little impact as possible. 
+	This can be configured with the <strong>sleep</strong> or <strong>sleep-ratio</strong> options. 
+	While sleeping between chunks, no locks are being placed.
+</p>
+<p>
+	Even so, a performance impact is noticed while the application runs, and this is due to the triggers added on the table, and the propagation of DML statements to the ghost table.
+	
+	It is required to have enough disk space to accommodate the altered table (as in a normal ALTER TABLE). Only when the operation completes can there be a disk space regaining (depending on your storage engine and configuration).
+</p>
 <h3>OPTIONS</h3>
 -a ALTER_STATEMENT, --alter=ALTER_STATEMENT
 <p class="indent">Comma delimited ALTER statement details, excluding the 'ALTER TABLE t' itself. When this options is not used, an 'empty' ALTER is performed, essentially rebuilding the table.</p>
@@ -108,6 +123,21 @@ port=3306</strong>
 <p class="indent">Use LOCK TABLES for each chunk. This option enforces a higher locking mechanism, and is at current available as preparation to be able to work with unsupported engines. It is not required nor advisable to use this option with MyISAM or InnoDB engines. <em>[May be removed in future versions].
 </em>
 
+-N, --skip-binlog     
+<p class="indent">Disable binary logging; operation to only execute on master and not to propagate to slaves. 
+By default this is disabled and ALTER oprations are propagated to slaves.</p>
+
+-r MAX_LOCK_RETRIES, --max-lock-retries=MAX_LOCK_RETRIES
+<p class="indent">Maximum times to retry a chunk in case of a deadlock or
+lock_wait_timeout. (default: 10; 0 is unlimited)</p>
+
+--skip-delete-pass    
+<p class="indent">Do not execute the DELETE data pass. 
+With InnoDB/MyISAM there is apparently no need for the DELETE pass;
+setting this flag reduces total runtime significantly. 
+In the future this will be set by default. </p>
+                        
+
 -p PASSWORD, --password=PASSWORD
 <p class="indent">MySQL password</p>
 
@@ -119,6 +149,11 @@ port=3306</strong>
 
 --sleep=SLEEP_MILLIS
 <p class="indent">Number of milliseconds to sleep between chunks. Default: 0. Use a higher value if your system suffers from high load average. The higher the value, the more time the system is allowed to 'rest', but also the longer the runtime, and the more overhead (over time) from the triggers effect. You may also wish to set a higher number if slaves are finding it hard otherwise to catch up.</p>
+
+--sleep-ratio=SLEEP_RATIO
+<p class="indent">Ratio of sleep time to execution time. 
+Sleep time will be proportional to execution time per chunk, as opposed of being 
+constant with <strong>--sleep</strong>. Default: 0 (no sleep)</p>
 
 -S SOCKET, --socket=SOCKET
 <p class="indent">MySQL socket file. Only applies when host is localhost</p>
