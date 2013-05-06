@@ -757,8 +757,8 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
         if unique_key_type == "integer":
             ratio_complete_query = """
                 SELECT
-                    (@unique_key_range_start_0-@unique_key_min_value_0)/
-                    (@unique_key_max_value_0-@unique_key_min_value_0)
+                    IFNULL((@unique_key_range_start_0-@unique_key_min_value_0)/
+                    (@unique_key_max_value_0-@unique_key_min_value_0), 1)
                     AS ratio_complete
                 """
             ratio_complete = float(get_row(ratio_complete_query)["ratio_complete"])
@@ -766,8 +766,8 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
         elif unique_key_type == "temporal":
             ratio_complete_query = """
                 SELECT
-                    TIMESTAMPDIFF(SECOND, @unique_key_min_value_0, @unique_key_range_start_0)/
-                    TIMESTAMPDIFF(SECOND, @unique_key_min_value_0, @unique_key_max_value_0)
+                    IFNULL(TIMESTAMPDIFF(SECOND, @unique_key_min_value_0, @unique_key_range_start_0)/
+                    TIMESTAMPDIFF(SECOND, @unique_key_min_value_0, @unique_key_max_value_0), 1)
                     AS ratio_complete
                 """
             ratio_complete = float(get_row(ratio_complete_query)["ratio_complete"])
