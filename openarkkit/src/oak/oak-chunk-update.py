@@ -467,6 +467,10 @@ def get_progress_and_eta_presentation(ratio_complete):
     return "progress: %d%%" % progress
 
 
+def to_string_list(list):
+    return ["%s" % val for val in list]
+
+
 def sleep_after_chunk(query_execution_time):
     sleep_seconds = None
     if options.sleep_millis > 0:
@@ -521,7 +525,7 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
                         AS ratio_complete
                     """
                 ratio_complete = float(get_row(ratio_complete_query)["ratio_complete"])
-                verbose("%s range (%s), (%s), %s" % (description, ",".join("%s" % val for val in unique_key_range_start_values), ",".join("%s" % val for val in unique_key_range_end_values), get_progress_and_eta_presentation(ratio_complete)))
+                verbose("%s range (%s), (%s), %s" % (description, ",".join(to_string_list(unique_key_range_start_values)), ",".join(to_string_list(unique_key_range_end_values)), get_progress_and_eta_presentation(ratio_complete)))
             elif unique_key_type == "temporal":
                 ratio_complete_query = """
                     SELECT
@@ -530,9 +534,9 @@ def act_data_pass(first_data_pass_query, rest_data_pass_query, description):
                         AS ratio_complete
                     """
                 ratio_complete = float(get_row(ratio_complete_query)["ratio_complete"])
-                verbose("%s range ('%s', '%s'), %s" % (description, ",".join(unique_key_range_start_values), ",".join(unique_key_range_end_values), get_progress_and_eta_presentation(ratio_complete)))
+                verbose("%s range ('%s', '%s'), %s" % (description, ",".join(to_string_list(unique_key_range_start_values)), ",".join(to_string_list(unique_key_range_end_values)), get_progress_and_eta_presentation(ratio_complete)))
             else:
-                verbose("%s range (%s), (%s), progress: N/A" % (description, ",".join(unique_key_range_start_values), ",".join(unique_key_range_end_values)))
+                verbose("%s range (%s), (%s), progress: N/A" % (description, ",".join(to_string_list(unique_key_range_start_values)), ",".join(to_string_list(unique_key_range_end_values))))
     
             num_affected_rows = 0
             query_execution_time = 0
