@@ -1,0 +1,247 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	<title>oak-online-alter-table: openark kit documentation</title>
+	<meta name="description" content="oak-online-alter-table: openark kit" />
+	<meta name="keywords" content="oak-online-alter-table: openark kit" />
+	<link rel="stylesheet" type="text/css" href="style.css" />
+</head>
+
+<body>
+	<div id="main">
+		<div id="header">
+			<h1>openark kit documentation</h1>
+			<div class="subtitle">Common utilities for MySQL</div>
+		</div>
+		<div id="contentwrapper">
+			<div id="content">
+				<h2><a href="oak-online-alter-table.html">oak-online-alter-table</a></h2>	
+<h3>NAME</h3>
+oak-online-alter-table: Perform a non-blocking ALTER TABLE operation
+<h3>SYNOPSIS</h3>
+Add an index on the Population column, City table, world database:
+<blockquote>oak-online-alter-table --database=world --table=City --alter="ADD KEY(Population)"</blockquote>
+Same as above, specify database with table name:
+<blockquote>oak-online-alter-table --table=world.City --alter="ADD KEY(Population)"</blockquote>
+Perform multiple alters:
+<blockquote>oak-online-alter-table --table=world.City --alter="ADD KEY(Population), MODIFY Name VARCHAR(64) CHARSET utf8 NOT NULL"</blockquote>
+Add column, drop column, modify AUTO_INCREMENT:
+<blockquote>oak-online-alter-table --table=world.City --alter="ADD COLUMN Mayor VARCHAR(64) CHARSET utf8 DEFAULT '', DROP COLUMN district, MODIFY id SMALLINT AUTO_INCREMENT"</blockquote>
+Do not ALTER, just rebuild City:
+<blockquote>oak-online-alter-table --database=world --table=City</blockquote>
+Create a ghost table called City_mirror, which is updated online from City table:
+<blockquote>oak-online-alter-table --database=world --table=City --alter="ADD KEY(Population)" --ghost=City_mirror</blockquote>
+Perform ALTER in chunks of 5000 rows:
+<blockquote>oak-online-alter-table --table=world.City --alter="ADD KEY(Population)" --chunk-size=5000</blockquote>
+Perform ALTER in chunks of 5000 rows, sleep for 20 milliseconds between chunks:
+<blockquote>oak-online-alter-table --table=world.City --alter="ADD KEY(Population)" --chunk-size=5000 --sleep=20</blockquote>
+Perform ALTER, use sleep ratio of 2; sleep 2 seconds for every second spent working:
+<blockquote>oak-online-alter-table --table=world.City --alter="ADD KEY(Population)" --sleep-ratio=2</blockquote>
+Perform a cleanup for an aborted run:
+<blockquote>oak-online-alter-table --database=world --table=City --cleanup</blockquote>
+Provide connection parameters. Prompt for password:
+<blockquote>oak-online-alter-table --database=world --table=City --alter="ADD KEY(Population)" --user=root --ask-pass --socket=/tmp/mysql.sock</blockquote>
+Use a defaults file for connection parameters:
+<blockquote>oak-online-alter-table --database=world --table=City --alter="ADD KEY(Population)" --defaults-file=/home/myuser/.my-oak.cnf</blockquote>
+
+<h3>DESCRIPTION</h3>
+<p>
+	oak-online-alter-table allows for non blocking ALTER TABLE operations, table rebuilds and creating a table's ghost.
+</p>
+<p>
+	To run this utility, the following requirements must be met:
+	<ul>
+		<li>The table has at least one single-column UNIQUE KEY<em></em></li>
+		<li>Altered table shares a single-column UNIQUE KEY with the original table<em></em></li>
+		<li>No ‘AFTER’ triggers are defined on the table (the utility creates its own triggers for the duration of the operation)</li>
+		<li>The table has no FOREIGN KEYs<em></em></li>
+		<li>Table name is no longer than 57 characters</li>
+	</ul>
+	The utility provides with three basic functionalities:
+	<ul>
+		<li>A non blocking ALTER TABLE operation: adding columns or keys, dropping columns or keys, modifying columns, converting table character set etc., are all supported, under the following restrictions:
+	<ul>
+		<li>ADD COLUMN (new column must have a default value)</li>
+		<li>DROP COLUMN (as long as there’s still a shared single-column UNIQUE KEY between the old table and the altered one)</li>
+		<li>MODIFY COLUMN (change type, including UNIQUE KEY columns)</li>
+		<li>ADD KEY (normal, unique, fulltext etc.)</li>
+		<li>DROP KEY (as long as there’s still a shared single-column UNIQUE KEY between the old table and the altered one)</li>
+		<li>Change ENGINE: works, but great care should be taken when dealing with non-transactional engines</li>
+		<li>Adding FOREIGN KEY constraints is possible</li>
+		<li>More… Not all ALTERS have been tested, e.g. CONVERT, partition handling…</li>
+	</ul>
+	</li>
+		<li>An empty ALTER, which rebuilds a table: potentially releasing disk space and organizing rows in a more optimized way on disk.</li>
+		<li>(May not be supported in future versions): Creating a live 'ghost' table, which is synchronized with the original table, as long as the following do not occur:
+	<ul>
+		<li>An ALTER TABLE on the original table</li>
+		<li>A TRUNCATE on the original table</li>
+		<li>LOAD DATA INFILE into the original table</li>
+		<li>OPTIMIZE on the original table</li>
+	</ul>
+	</li>
+	</ul>
+	While the utility runs, it is allowed to invoke INSERT, UPDATE, DELETE, REPLACE on the original table. It is not allowed to TRUNCATE, ALTER, REPAIR, OPTIMIZE or otherwise perform a table-wide operation on the original table.
+</p>
+<p>
+	The utility works with InnoDB tables, MyISAM tables, or otherwise any table-level locking storage engine (MEMORY, ARCHIVE). 
+</p>
+<p>
+	The utility works by creating a ghost table for the duration of the runtime, which is slowly synchronized with the original table. When the synchronization is complete, it takes place of the original table. To do this, the utility must create AFTER INSERT, AFTER UPDATE, AFTER DELETE triggers on the original table.
+</p>
+
+<p>
+	Synchronizing the ghost table with the original tables takes place in several steps. In one of those steps, data is copied from the original table to the ghost table. This is done in chunks of rows, the number of which is configurable using the <strong>chunk-size</strong> option. While a chunk is being copied, there is a read lock on the table (MyISAM, ARCHIVE, MEMORY) or on the rows contained in the chunk (InnoDB). The smaller the chunk - the faster the locks are removed, and the more concurrency is allowed; but also the longer it will take for the entire operation to complete.
+</p>	
+<p>
+	For write intensive application, it may be advisable to allow for pauses between chunks, 
+	so as to make as little impact as possible. 
+	This can be configured with the <strong>sleep</strong> or <strong>sleep-ratio</strong> options. 
+	While sleeping between chunks, no locks are being placed.
+</p>
+<p>
+	Even so, a performance impact is noticed while the application runs, and this is due to the triggers added on the table, and the propagation of DML statements to the ghost table.
+	
+	It is required to have enough disk space to accommodate the altered table (as in a normal ALTER TABLE). Only when the operation completes can there be a disk space regaining (depending on your storage engine and configuration).
+</p>
+<h3>OPTIONS</h3>
+-a ALTER_STATEMENT, --alter=ALTER_STATEMENT
+<p class="indent">Comma delimited ALTER statement details, excluding the 'ALTER TABLE t' itself. When this options is not used, an 'empty' ALTER is performed, essentially rebuilding the table.</p>
+
+--ask-pass
+<p class="indent">Prompt for password.</p>
+
+-c CHUNK_SIZE, --chunk-size=CHUNK_SIZE
+<p class="indent">Number of rows to act on in chunks. Default: 1000. The lower the number, the shorter any locks are held, but the more operations required and the more total running time. Do not use very low values when the PRIMARY KEY, or otherwise the only UNIQUE KEY are on textual columns, as values from such keys are reused when working the chunks. If you're not sure - stick with the defaults.</p>
+
+--cleanup
+<p class="indent">Remove custom triggers, ghost table from possible previous runs. In case a previous run was abruptly terminated, this option removes all custom data this utility may have created. It is not necessary to run with this option after a normal completion.</p>
+
+-d DATABASE, --database=DATABASE
+<p class="indent">Database name (required unless table is fully qualified)</p>
+
+--defaults-file=DEFAULTS_FILE
+<p class="indent">Read from MySQL configuration file. Overrides --user, --password, --socket, --port.</p>
+<p class="indent">Configuration needs to be in the following format:</p>
+
+<p class="indent"><strong>[client]<br/>
+user=my_user<br/>
+password=my_pass<br/>
+socket=/tmp/mysql.sock<br/>
+port=3306</strong>
+</p>
+
+-g GHOST, --ghost=GHOST
+<p class="indent">Table name to serve as ghost. When this option is used, a table by this name is created and synchronized with the original table. The original table is thereafter unaltered, and the three AFTER INSERT, AFTER UPDATE and AFTER DELETE triggers are maintained. To perform an ALTER TABLE, do not use this option. <em>[May be removed in future versions]</em></p>
+
+-H HOST, --host=HOST
+<p class="indent">MySQL host (default: localhost)</p>
+
+-l, --lock-chunks
+<p class="indent">Use LOCK TABLES for each chunk. This option enforces a higher locking mechanism, and is at current available as preparation to be able to work with unsupported engines. It is not required nor advisable to use this option with MyISAM or InnoDB engines. <em>[May be removed in future versions].
+</em>
+
+-N, --skip-binlog     
+<p class="indent">Disable binary logging; operation to only execute on master and not to propagate to slaves. 
+By default this is disabled and ALTER oprations are propagated to slaves.</p>
+
+-r MAX_LOCK_RETRIES, --max-lock-retries=MAX_LOCK_RETRIES
+<p class="indent">Maximum times to retry a chunk in case of a deadlock or
+lock_wait_timeout. (default: 10; 0 is unlimited)</p>
+
+--skip-delete-pass    
+<p class="indent">Do not execute the DELETE data pass. 
+With InnoDB/MyISAM there is apparently no need for the DELETE pass;
+setting this flag reduces total runtime significantly. 
+In the future this will be set by default. </p>
+                        
+
+-p PASSWORD, --password=PASSWORD
+<p class="indent">MySQL password</p>
+
+-P PORT, --port=PORT
+<p class="indent">TCP/IP port (default: 3306)</p>
+
+-q, --quiet
+<p class="indent">Quiet mode, do not verbose. Verbose is on by default, use this option to turn it off.</p>
+
+--sleep=SLEEP_MILLIS
+<p class="indent">Number of milliseconds to sleep between chunks. Default: 0. Use a higher value if your system suffers from high load average. The higher the value, the more time the system is allowed to 'rest', but also the longer the runtime, and the more overhead (over time) from the triggers effect. You may also wish to set a higher number if slaves are finding it hard otherwise to catch up.</p>
+
+--sleep-ratio=SLEEP_RATIO
+<p class="indent">Ratio of sleep time to execution time. 
+Sleep time will be proportional to execution time per chunk, as opposed of being 
+constant with <strong>--sleep</strong>. Default: 0 (no sleep)</p>
+
+-S SOCKET, --socket=SOCKET
+<p class="indent">MySQL socket file. Only applies when host is localhost</p>
+
+-t TABLE, --table=TABLE
+<p class="indent">Table with AUTO_INCREMENT column to alter (optionally fully qualified as database_name.table_name, in which case --database is not required)</p>
+
+-u USER, --user=USER
+<p class="indent">MySQL user</p>
+
+-v, --verbose
+<p class="indent">Print user friendly messages. Enabled by default.</p>
+
+<h3>ENVIRONMENT</h3>
+Requires MySQL 5.0 or newer, python 2.3 or newer.
+
+python-mysqldb must be installed in order to use this tool. You can
+<blockquote>apt-get install python-mysqldb</blockquote>
+or
+<blockquote>yum install mysql-python</blockquote>
+<h3>SEE ALSO</h3>
+<h3>LICENSE</h3>
+This tool is released under the BSD license.
+<blockquote><pre>Copyright (c) 2008 - 2010, Shlomi Noach
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+* Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+* Neither the name of the organization nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR 
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT 
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR 
+TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</pre>
+</blockquote>
+<h3>AUTHOR</h3>
+Shlomi Noach
+				<br/>
+			</div>
+			<div id="sidebarwrapper">
+				<div id="menu">
+					<h3>openark kit tools</h3>
+					<ul>
+						<li><a title="Introduction" href="introduction.html">Introduction</a></li>
+						<li><a title="Download" href="download.html">Download</a></li>
+						<li><a title="Install" href="install.html">Install</a></li>
+						<li><a title="oak-apply-ri" href="oak-apply-ri.html">oak-apply-ri</a></li>
+						<li><a title="oak-block-account" href="oak-block-account.html">oak-block-account</a></li>
+						<li><a title="oak-chunk-update" href="oak-chunk-update.html">oak-chunk-update</a></li>
+						<li><a title="oak-get-slave-lag" href="oak-get-slave-lag.html">oak-get-slave-lag</a></li>
+						<li><a title="oak-hook-general-log" href="oak-hook-general-log.html">oak-hook-general-log</a></li>
+						<li><a title="oak-kill-slow-queries" href="oak-kill-slow-queries.html">oak-kill-slow-queries</a></li>
+						<li><a title="oak-modify-charset" href="oak-modify-charset.html">oak-modify-charset</a></li>
+						<li><a title="oak-online-alter-table" href="oak-online-alter-table.html">oak-online-alter-table</a></li>
+						<li><a title="oak-prepare-shutdown" href="oak-prepare-shutdown.html">oak-prepare-shutdown</a></li>
+						<li><a title="oak-purge-master-logs" href="oak-purge-master-logs.html">oak-purge-master-logs</a></li>
+						<li><a title="oak-repeat-query" href="oak-repeat-query.html">oak-repeat-query</a></li>
+						<li><a title="oak-security-audit" href="oak-security-audit.html">oak-security-audit</a></li>
+						<li><a title="oak-show-limits" href="oak-show-limits.html">oak-show-limits</a></li>
+						<li><a title="oak-show-replication-status" href="oak-show-replication-status.html">oak-show-replication-status</a></li>
+					</ul>
+				</div>
+			</div>	
+			<div class="clear">&nbsp;</div>
+			
+			<div id="footnote" align="center">
+				<a href="">openark kit</a> documentation
+			</div>
+		</div>
+	</div>
+</body>
+</html>

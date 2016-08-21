@@ -1,0 +1,159 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	<title>oak-show-replication-status: openark kit documentation</title>
+	<meta name="description" content="oak-show-replication-status: openark kit" />
+	<meta name="keywords" content="oak-show-replication-status: openark kit" />
+	<link rel="stylesheet" type="text/css" href="style.css" />
+</head>
+
+<body>
+	<div id="main">
+		<div id="header">
+			<h1>openark kit documentation</h1>
+			<div class="subtitle">Common utilities for MySQL</div>
+		</div>
+		<div id="contentwrapper">
+			<div id="content">
+				<h2><a href="oak-show-replication-status.html">oak-show-replication-status</a></h2>	
+<h3>NAME</h3>
+oak-show-replication-status: show how far behind are replicating slaves on a given master
+<h3>SYNOPSIS</h3>
+Show the replication status on the localhost machine:
+<blockquote>oak-show-replication-status</blockquote>
+Show the replication status on a given master database:
+<blockquote>oak-show-replication-status --host=192.168.2.103</blockquote>
+Show the replication status on a given master database, expect two slaves:
+<blockquote>oak-show-replication-status --host=192.168.2.103 --expect-num-slaves=2</blockquote>
+Show the replication status on a given master database, expect two slaves, consider 20 seconds lag to be normal delay:
+<blockquote>oak-show-replication-status --host=192.168.2.103 -n 2 --normal-delay=20</blockquote>
+Same as above, provide connection parameters, prompt for password:
+<blockquote>oak-show-replication-status --host=192.168.2.103  --user=root --ask-pass --socket=/tmp/mysql.sock -n 2 -d 20</blockquote>
+Same as above, use defaults file:
+<blockquote>oak-show-replication-status --defaults-file=/home/myuser/.my-oak.cnf -n 2 -d 20</blockquote>
+<h3>DESCRIPTION</h3>
+oak-show-replication-status outputs a short report which diagnoses how far behind a given master are its slaves.
+
+The utility connects to a master server, reads the master status, locates the active slaves, connects to those slaves, and reads their slave status. The utility considers a "normal delay behind the master" and reports the following:
+<ul>
+	<li>The current master logs file</li>
+	<li>If any slaves are missing (see --expect-num-slaves), an error message</li>
+	<li>For each connected slave: its master log file, seconds behind master and status.</li>
+</ul>
+The "status" part will hsow one of the following:
+<ul>
+	<li>"Good": the slave is up to date with the master: it is less than "--normal-delay" behind master.</li>
+	<li>"Lag": the slave is more than "--normal-delay" behind master, but is up to date with latest binary log.</li>
+	<li>"Far behind": the slave is more than "--normal-delay" behind master, and is not even up to date with latest binary log.</li>
+</ul>
+This is a sample report output:
+<blockquote>
+<pre>-- master log: mymaster-bin.001761
+-- Slave host   Master_Log_File       Seconds_Behind_Master   Status
+-- myslave1     mymaster-bin.001761   0                       Good
+-- myslave2     mymaster-bin.001761   0                       Good</pre>
+</blockquote>
+The binary log considered is the last one fetched by the slave (and is not necessarily processed yet).
+
+oak-show-replication-status does not act recursively. If one of the slaves is itself a master, the utility does not check up on its slaves.
+<h3>OPTIONS</h3>
+--ask-pass
+<p class="indent">Prompt for password.</p>
+
+-d NORMAL_DELAY, --normal-delay=NORMAL_DELAY
+<p class="indent">Acceptable seconds behind master. A slave lagging behind less than give number is considered to be in "Good" state.</p>
+
+--defaults-file=DEFAULTS_FILE
+<p class="indent">Read from MySQL configuration file. Overrides --user, --password, --socket, --port.</p>
+<p class="indent">Configuration needs to be in the following format:</p>
+
+<p class="indent"><strong>[client]<br/>
+user=my_user<br/>
+password=my_pass<br/>
+socket=/tmp/mysql.sock<br/>
+port=3306</strong>
+</p>
+
+-H HOST, --host=HOST
+<p class="indent">MySQL master host (default: localhost)</p>
+
+-n EXPECT_NUM_SLAVES, --expect-num-slaves=EXPECT_NUM_SLAVES
+<p class="indent">Number of slaves to expect (default: 0). If less than given number slaves can be found, and error message is written.</p>
+
+-p PASSWORD, --password=PASSWORD
+<p class="indent">MySQL password. The same password is expected to apply for the master and the slaves.</p>
+
+-P PORT, --port=PORT
+<p class="indent">TCP/IP port (default: 3306)</p>
+
+--skip-show-slave-hosts
+<p class="indent">When SHOW SLAVE HOSTS returns rows, these are considered the only slave hosts. Otherwise slaves are found looking at SHOW PROCESSLIST. With --skip-show-slave-hosts, only SHOW PROCESSLIST is used.</p>
+
+-S SOCKET, --socket=SOCKET
+<p class="indent">MySQL socket file. Only applies when host is localhost</p>
+
+-u USER, --user=USER
+<p class="indent">MySQL user. The same user is expected to apply for the master and the slaves.</p>
+
+<h3>ENVIRONMENT</h3>
+Requires MySQL 5.0 or newer, python 2.3 or newer.
+
+python-mysqldb must be installed in order to use this tool. You can
+<blockquote>apt-get install python-mysqldb</blockquote>
+or
+<blockquote>yum install mysql-python</blockquote>
+<h3>SEE ALSO</h3>
+<p>oak-purge-master-logs</p>
+<p>oak-get-slave-lag</p>
+<h3>LICENSE</h3>
+This tool is released under the BSD license.
+<blockquote><pre>Copyright (c) 2008 - 2010, Shlomi Noach
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+* Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+* Neither the name of the organization nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR 
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT 
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR 
+TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</pre>
+</blockquote>
+<h3>AUTHOR</h3>
+Shlomi Noach
+				<br/>
+			</div>
+			<div id="sidebarwrapper">
+				<div id="menu">
+					<h3>openark kit tools</h3>
+					<ul>
+						<li><a title="Introduction" href="introduction.html">Introduction</a></li>
+						<li><a title="Download" href="download.html">Download</a></li>
+						<li><a title="Install" href="install.html">Install</a></li>
+						<li><a title="oak-apply-ri" href="oak-apply-ri.html">oak-apply-ri</a></li>
+						<li><a title="oak-block-account" href="oak-block-account.html">oak-block-account</a></li>
+						<li><a title="oak-chunk-update" href="oak-chunk-update.html">oak-chunk-update</a></li>
+						<li><a title="oak-get-slave-lag" href="oak-get-slave-lag.html">oak-get-slave-lag</a></li>
+						<li><a title="oak-hook-general-log" href="oak-hook-general-log.html">oak-hook-general-log</a></li>
+						<li><a title="oak-kill-slow-queries" href="oak-kill-slow-queries.html">oak-kill-slow-queries</a></li>
+						<li><a title="oak-modify-charset" href="oak-modify-charset.html">oak-modify-charset</a></li>
+						<li><a title="oak-online-alter-table" href="oak-online-alter-table.html">oak-online-alter-table</a></li>
+						<li><a title="oak-prepare-shutdown" href="oak-prepare-shutdown.html">oak-prepare-shutdown</a></li>
+						<li><a title="oak-purge-master-logs" href="oak-purge-master-logs.html">oak-purge-master-logs</a></li>
+						<li><a title="oak-repeat-query" href="oak-repeat-query.html">oak-repeat-query</a></li>
+						<li><a title="oak-security-audit" href="oak-security-audit.html">oak-security-audit</a></li>
+						<li><a title="oak-show-limits" href="oak-show-limits.html">oak-show-limits</a></li>
+						<li><a title="oak-show-replication-status" href="oak-show-replication-status.html">oak-show-replication-status</a></li>
+					</ul>
+				</div>
+			</div>	
+			<div class="clear">&nbsp;</div>
+			
+			<div id="footnote" align="center">
+				<a href="">openark kit</a> documentation
+			</div>
+		</div>
+	</div>
+</body>
+</html>

@@ -1,0 +1,273 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	<title>oak-hook-general-log: openark kit documentation</title>
+	<meta name="description" content="oak-hook-general-log: openark kit" />
+	<meta name="keywords" content="oak-hook-general-log: openark kit" />
+	<link rel="stylesheet" type="text/css" href="style.css" />
+</head>
+
+<body>
+	<div id="main">
+		<div id="header">
+			<h1>openark kit documentation</h1>
+			<div class="subtitle">Common utilities for MySQL</div>
+		</div>
+		<div id="contentwrapper">
+			<div id="content">
+				<h2><a href="oak-hook-general-log.html">oak-hook-general-log</a></h2>	
+<h3>NAME</h3>
+oak-hook-general-log: hook up and filter general log entries based on entry type or execution plan criteria.
+<h3>SYNOPSIS</h3>
+Hook up the general log and dump everything:
+<blockquote>oak-hook-general-log --user=root --socket=/tmp/mysql.sock</blockquote>
+Only dump connect/disconnect events:
+<blockquote>oak-hook-general-log --user=root --socket=/tmp/mysql.sock --filter-connection</blockquote>
+Same as above, use defaults file:
+<blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-connection</blockquote>
+Only dump queries which make for a full table scan <i>and</i> use the City table:
+<blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-fullscan --filter-explain-table=City</blockquote>
+Only dump queries which make for a filesort:
+<blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-filesort</blockquote>
+Only dump queries which make for an implicit temporary table creation:
+<blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-temporary</blockquote>
+Only dump queries where the execution plan expects at least <b>100,000</b> rows in any of the tables:
+<blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-rows-exceed=100000</blockquote>
+Only dump queries where the execution plan expects at least <b>1,000,000</b> rows combined:
+<blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-total-rows-exceed=1000000</blockquote>
+Only dump queries where the execution plan uses given index (`first_name` index on `authors` table):
+<blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-key=actor.first_name</blockquote>
+Only dump queries where the execution plan contains given text anywhere (e.g. in key name, ref, etc.)
+This serves as a <i>grep</i> on the execution plan.
+<blockquote>oak-hook-general-log --defaults-file=/home/myuser/.my-oak.cnf --filter-explain-contains=my_column_name</blockquote>
+
+<h3>DESCRIPTION</h3>
+<p><i>oak-hook-general-log</i> hooks up to a MySQL >= 5.1 server, and dumps general log to standard output, allowing for sophisticated filtering.</p>
+<p>Query filtering relies not only on query text (for which <i>grep</i> or <i>awk</i> are good tools) but rather on query type and query execution plan.
+It is possible to only dump connect/disconnect queries; queries which make for a table scan; queries which scan more than <b>100,000</b> rows; or queries which use a specific index.
+</p>
+<p>The tool activates the server's <i>general log</i>, and instructs it to write to log table (<b>mysql.general_log</b>). 
+The <b>general_log</b> table is periodically polled for new entries and rotated. Tool's output corresponds to the <b>general_log</b> table schema: </p>
+<blockquote><pre>mysql-5.1.51> DESC mysql.general_log;
++--------------+------------------+------+-----+-------------------+-----------------------------+
+| Field        | Type             | Null | Key | Default           | Extra                       |
++--------------+------------------+------+-----+-------------------+-----------------------------+
+| event_time   | timestamp        | NO   |     | CURRENT_TIMESTAMP | on update CURRENT_TIMESTAMP |
+| user_host    | mediumtext       | NO   |     | NULL              |                             |
+| thread_id    | int(11)          | NO   |     | NULL              |                             |
+| server_id    | int(10) unsigned | NO   |     | NULL              |                             |
+| command_type | varchar(64)      | NO   |     | NULL              |                             |
+| argument     | mediumtext       | NO   |     | NULL              |                             |
++--------------+------------------+------+-----+-------------------+-----------------------------+
+</pre></blockquote>
+<p>A sample output may look like this:</p>
+<blockquote><pre>2010-12-07 11:30:23     root[root] @ localhost []       8       1       Connect root@localhost on
+2010-12-07 11:30:23     root[root] @ localhost []       8       1       Query   select 1
+2010-12-07 11:30:39     root[root] @ localhost []       8       1       Query   show processlist
+2010-12-07 11:30:45     root[root] @ localhost []       8       1       Query   desc mysql.general_log</pre></blockquote>
+
+<p>Activation of the <i>general_log</i>, and in particular writing to the <b>general_log</b> table makes for considerable overhead. 
+The tool is configured to automatically terminate after one minute from the time of execution, or as configured by <b>--timeout-minutes</b>.
+Upon termination the tool restores original <i>general_log</i> settings.</p>
+
+<p>Interrupting the tool via Ctrl-C makes for a graceful termination, and original settings are restored. Any other means of termination
+(e.g. via <i>kill -9</i> results with the <i>general_log</i> remaining active. Make sure to disable it!</p>
+
+<p>The reason the <b>general_log</b> table is used is that the <i>general_log</i> file is in inconsistent format, and lacks some information such as user & host, 
+which must be cross referenced to previous entries. This makes it impossible to diagnose existing connections when no log entries are present.</p>
+<p>Even so, the <b>general_log</b> table lacks the current database for the given connection, information which is critical to understanding the context of the query 
+(this information <i>can</i> be found in the <b>slow_log</b> table). To overcome this limitation, <i>oak-hook-general-log</i> cross-references the general log
+entries with PROCESSLIST entries. There may still be mismatches, but on most situations this should work well.</p>
+
+<p>When asked to filter by execution plan criteria, <i>oak-hook-general-log</i> invokes an <b>EXPLAIN</b> query for each <b>SELECT</b> query encountered.
+This may further slow down your overall performance if execution plans are complicated. However, you should note it does not delay the execution of the query itself.
+In fact, the execution plan is calculated after the query is invoked.
+</p>
+
+<p>
+It is possible to specify multiple filter criteria. For a query to be logged, it must answer for <i>all</i> specified filters.
+</p>
+
+<h3>OPTIONS</h3>
+--ask-pass
+<p class="indent">Prompt for password.</p>
+
+--debug
+<p class="indent">Print stack trace on error.</p>
+
+--defaults-file=DEFAULTS_FILE
+<p class="indent">Read from MySQL configuration file. Overrides --user, --password, --socket, --port.</p>
+<p class="indent">Configuration needs to be in the following format:</p>
+
+<p class="indent"><strong>[client]<br/>
+user=my_user<br/>
+password=my_pass<br/>
+socket=/tmp/mysql.sock<br/>
+port=3306</strong>
+</p>
+
+--filter-connection   
+<p class="indent">Only output connect/disconnect entries</p>
+
+--filter-explain-contains=FILTER_EXPLAIN_CONTAINS
+<p class="indent">
+                        Only output queries whose execution plan contains
+                        given text
+</p>
+
+--filter-explain-filesort
+<p class="indent">
+                        Only output queries where execution plan indicates
+                        filesort
+</p>
+
+--filter-explain-fulljoin
+<p class="indent">
+                        Only output queries where execution plan indicates
+                        full join
+</p>
+
+--filter-explain-fullscan
+<p class="indent">
+                        Only output queries where execution plan indicates
+</p>
+
+--filter-explain-indexscan
+<p class="indent">
+                        Only output queries where execution plan indicates
+                        full index scan
+</p>
+
+--filter-explain-key=FILTER_EXPLAIN_KEY
+<p class="indent">
+                        Only output queries where given key is used (specify
+                        key_name or table_name.key_name)
+</p>
+ 
+--filter-explain-rows-exceed=FILTER_EXPLAIN_ROWS_EXCEED
+<p class="indent">
+                        Only output queries where some path in the execution
+                        plan expects more than given number of rows scanned
+</p>
+
+--filter-explain-table=FILTER_EXPLAIN_TABLE
+<p class="indent">
+                        Only output queries where given table is used
+</p>
+
+--filter-explain-temporary
+<p class="indent">
+                        Only output queries where execution plan indicates use
+                        of temporary tables
+</p>
+
+--filter-explain-total-rows-exceed=FILTER_EXPLAIN_TOTAL_ROWS_EXCEED
+<p class="indent">
+                        Only output queries where execution plan expects at least as given total
+                        number of rows scanned
+</p>
+
+--filter-query        
+<p class="indent">
+						Only output queries
+</p>
+
+--filter-query-contains=FILTER_QUERY_CONTAINS
+<p class="indent">
+	Only consider queries containing given text
+</p>
+
+-H HOST, --host=HOST
+<p class="indent">MySQL host (default: localhost)</p>
+
+--include-existing    
+<p class="indent">
+						Include possibly pre-existing entries in the general
+                        log table (default: disabled)
+</p>
+
+-p PASSWORD, --password=PASSWORD
+<p class="indent">MySQL password</p>
+
+-P PORT, --port=PORT
+<p class="indent">TCP/IP port (default: 3306)</p>
+
+-s SLEEP_TIME, --sleep-time=SLEEP_TIME
+<p class="indent">Number of seconds between log polling (default: 1)</p>
+
+-S SOCKET, --socket=SOCKET
+<p class="indent">MySQL socket file. Only applies when host is localhost</p>
+
+-t TIMEOUT_MINUTES, --timeout-minutes=TIMEOUT_MINUTES
+<p class="indent">Auto disconnect after given number of minutes (default: 1)</p>
+
+-u USER, --user=USER
+<p class="indent">MySQL user</p>
+
+-v, --verbose
+<p class="indent">Print user friendly messages</p>
+
+<h3>ENVIRONMENT</h3>
+Requires MySQL 5.1 or newer, python 2.3 or newer.
+
+python-mysqldb must be installed in order to use this tool. You can
+<blockquote>apt-get install python-mysqldb</blockquote>
+or
+<blockquote>yum install mysql-python</blockquote>
+<p>Please note that in MySQL versions &lt; <b>5.1.46</b> you may run into <a href="http://bugs.mysql.com/bug.php?id=49823">this bug</a>, in which MySQL 
+allows for invalid <b>general_log</b> CSV tables. You may wish to either upgrade your MySQL version or issue:</p>
+<blockquote>mysql&gt; ALTER TABLE mysql.general_log ENGINE=MyISAM;</blockquote>
+
+<h3>SEE ALSO</h3>
+<h3>LICENSE</h3>
+This tool is released under the BSD license.
+<blockquote><pre>Copyright (c) 2008 - 2010, Shlomi Noach
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+* Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+* Neither the name of the organization nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR 
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT 
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR 
+TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</pre>
+</blockquote>
+<h3>AUTHOR</h3>
+Shlomi Noach
+				<br/>
+			</div>
+			<div id="sidebarwrapper">
+				<div id="menu">
+					<h3>openark kit tools</h3>
+					<ul>
+						<li><a title="Introduction" href="introduction.html">Introduction</a></li>
+						<li><a title="Download" href="download.html">Download</a></li>
+						<li><a title="Install" href="install.html">Install</a></li>
+						<li><a title="oak-apply-ri" href="oak-apply-ri.html">oak-apply-ri</a></li>
+						<li><a title="oak-block-account" href="oak-block-account.html">oak-block-account</a></li>
+						<li><a title="oak-chunk-update" href="oak-chunk-update.html">oak-chunk-update</a></li>
+						<li><a title="oak-get-slave-lag" href="oak-get-slave-lag.html">oak-get-slave-lag</a></li>
+						<li><a title="oak-hook-general-log" href="oak-hook-general-log.html">oak-hook-general-log</a></li>
+						<li><a title="oak-kill-slow-queries" href="oak-kill-slow-queries.html">oak-kill-slow-queries</a></li>
+						<li><a title="oak-modify-charset" href="oak-modify-charset.html">oak-modify-charset</a></li>
+						<li><a title="oak-online-alter-table" href="oak-online-alter-table.html">oak-online-alter-table</a></li>
+						<li><a title="oak-prepare-shutdown" href="oak-prepare-shutdown.html">oak-prepare-shutdown</a></li>
+						<li><a title="oak-purge-master-logs" href="oak-purge-master-logs.html">oak-purge-master-logs</a></li>
+						<li><a title="oak-repeat-query" href="oak-repeat-query.html">oak-repeat-query</a></li>
+						<li><a title="oak-security-audit" href="oak-security-audit.html">oak-security-audit</a></li>
+						<li><a title="oak-show-limits" href="oak-show-limits.html">oak-show-limits</a></li>
+						<li><a title="oak-show-replication-status" href="oak-show-replication-status.html">oak-show-replication-status</a></li>
+					</ul>
+				</div>
+			</div>	
+			<div class="clear">&nbsp;</div>
+			
+			<div id="footnote" align="center">
+				<a href="">openark kit</a> documentation
+			</div>
+		</div>
+	</div>
+</body>
+</html>

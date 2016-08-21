@@ -1,0 +1,114 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	<title>install: openark kit documentation</title>
+	<meta name="description" content="install: openark kit" />
+	<meta name="keywords" content="install: openark kit" />
+	<link rel="stylesheet" type="text/css" href="style.css" />
+</head>
+
+<body>
+	<div id="main">
+		<div id="header">
+			<h1>openark kit documentation</h1>
+			<div class="subtitle">Common utilities for MySQL</div>
+		</div>
+		<div id="contentwrapper">
+			<div id="content">
+				<h2><a href="install.html">install</a></h2>	
+<p><i>openark kit</i> is available in the following flavors:</p>
+
+<ul>
+	<li>.deb package</li>
+	<li>.rpm package</li>
+	<li>python install package</li>
+</ul>
+
+<p>The latter also serves as scripts source archive.</p>
+
+<p>To use <i>openark kit</i>, you must have the python (>= 2.3) and the <i>python-mysql</i> module installed.</p>
+
+<p>On any reasonably recent Linux distribution, python (>= 2.3) should already be installed. 
+However, the python-mysql driver does not come installed by default on all common Linux distros. 
+Recent RedHat, Fedora, CentOS should include it by default.</p>
+
+<p>On Debian, Ubuntu and derived distros, one can install the <i>python-mysql</i> module with:</p>
+
+<blockquote><pre>
+sudo apt-get install python-mysqldb
+</pre></blockquote>
+
+<p>On RedHat, CentOS and derived distros, one can:</p>
+<blockquote><pre>
+yum install MySQL-python
+</pre></blockquote>
+<p>For other distros, BSD, etc, please refer to the <i>python-mysql</i> README file.</p>
+
+<h3>Installing openark kit</h3>
+
+<p>Using .deb package:</p>
+
+<blockquote><pre>
+sudo dpkg -i openark-kit-###.deb
+</pre></blockquote>
+
+<p>Using .rpm package:</p>
+
+<blockquote><pre>
+sudo rpm -i openark-kit-###-1.noarch.rpm
+</pre></blockquote>
+
+<p>Using python package (you must have <i>python-distutils</i>):</p>
+
+<blockquote><pre>
+tar xzfv openark-kit-###.tar.gz
+cd openark-kit-###
+sudo python setup.py install
+</pre></blockquote>
+
+<p>Using source files; extract the python package and manually copy scripts:</p>
+
+<blockquote><pre>
+tar xzfv openark-kit-###.tar.gz
+cd openark-kit-###/scripts
+</pre></blockquote>
+
+<h3>Installed files</h3>
+<p>Installed files are the <i>openark kit</i> tools, e.g. <i>oak-chunk-update</i>, <i>oak-hook-general-log</i>. 
+After installation these files should be on your path.</p>
+				<br/>
+			</div>
+			<div id="sidebarwrapper">
+				<div id="menu">
+					<h3>openark kit tools</h3>
+					<ul>
+						<li><a title="Introduction" href="introduction.html">Introduction</a></li>
+						<li><a title="Download" href="download.html">Download</a></li>
+						<li><a title="Install" href="install.html">Install</a></li>
+						<li><a title="oak-apply-ri" href="oak-apply-ri.html">oak-apply-ri</a></li>
+						<li><a title="oak-block-account" href="oak-block-account.html">oak-block-account</a></li>
+						<li><a title="oak-chunk-update" href="oak-chunk-update.html">oak-chunk-update</a></li>
+						<li><a title="oak-get-slave-lag" href="oak-get-slave-lag.html">oak-get-slave-lag</a></li>
+						<li><a title="oak-hook-general-log" href="oak-hook-general-log.html">oak-hook-general-log</a></li>
+						<li><a title="oak-kill-slow-queries" href="oak-kill-slow-queries.html">oak-kill-slow-queries</a></li>
+						<li><a title="oak-modify-charset" href="oak-modify-charset.html">oak-modify-charset</a></li>
+						<li><a title="oak-online-alter-table" href="oak-online-alter-table.html">oak-online-alter-table</a></li>
+						<li><a title="oak-prepare-shutdown" href="oak-prepare-shutdown.html">oak-prepare-shutdown</a></li>
+						<li><a title="oak-purge-master-logs" href="oak-purge-master-logs.html">oak-purge-master-logs</a></li>
+						<li><a title="oak-repeat-query" href="oak-repeat-query.html">oak-repeat-query</a></li>
+						<li><a title="oak-security-audit" href="oak-security-audit.html">oak-security-audit</a></li>
+						<li><a title="oak-show-limits" href="oak-show-limits.html">oak-show-limits</a></li>
+						<li><a title="oak-show-replication-status" href="oak-show-replication-status.html">oak-show-replication-status</a></li>
+					</ul>
+				</div>
+			</div>	
+			<div class="clear">&nbsp;</div>
+			
+			<div id="footnote" align="center">
+				<a href="">openark kit</a> documentation
+			</div>
+		</div>
+	</div>
+</body>
+</html>

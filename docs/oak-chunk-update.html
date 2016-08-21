@@ -1,0 +1,238 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	<title>oak-chunk-update: openark kit documentation</title>
+	<meta name="description" content="oak-chunk-update: openark kit" />
+	<meta name="keywords" content="oak-chunk-update: openark kit" />
+	<link rel="stylesheet" type="text/css" href="style.css" />
+</head>
+
+<body>
+	<div id="main">
+		<div id="header">
+			<h1>openark kit documentation</h1>
+			<div class="subtitle">Common utilities for MySQL</div>
+		</div>
+		<div id="contentwrapper">
+			<div id="content">
+				<h2><a href="oak-chunk-update.html">oak-chunk-update</a></h2>	
+<h3>NAME</h3>
+oak-chunk-update: Perform long, non-blocking UPDATE/DELETE operation in auto managed small chunks
+<h3>SYNOPSIS</h3>
+Delete rows from world.City where population is small:
+<blockquote>oak-chunk-update --database=world --execute="DELETE FROM City WHERE Population &lt; 10000000 AND OAK_CHUNK(City)"</blockquote>
+Same as above, provide fully qualified table names, use <b>100</b> rows chunk size:
+<blockquote>oak-chunk-update --execute="DELETE FROM world.City WHERE Population &lt; 10000000 AND OAK_CHUNK(world.City)" --chunk-size=100</blockquote>
+Same as above, sleep for <b>200</b> milliseconds between chunks, verbose:
+<blockquote>oak-chunk-update --database=world --execute="DELETE FROM City WHERE Population &lt; 10000000 AND OAK_CHUNK(City)" --chunk-size=100 --sleep=200 --verbose</blockquote>
+Same as above, quit when no rows are affected: 
+<blockquote>oak-chunk-update --database=world --execute="DELETE FROM City WHERE Population &lt; 10000000 AND OAK_CHUNK(City)" --chunk-size=100 --sleep=200 --verbose --terminate-on-not-found</blockquote>
+Perform a multi-table UPDATE operation, choose world.City as chunking table, sleep twice the query time:
+<blockquote>oak-chunk-update --execute="UPDATE City, Country SET City.District = 'unknown' WHERE City.CountryCode = Country.Code AND Country.Continent = 'Africa' AND OAK_CHUNK(City)" --sleep-ratio=2</blockquote>
+Same as above, avoid using INFORMATION_SCHEMA by specifying chunk key:
+<blockquote>oak-chunk-update --execute="UPDATE City, Country SET City.District = 'unknown' WHERE City.CountryCode = Country.Code AND Country.Continent = 'Africa' AND OAK_CHUNK(City)" --force-chunking-column=id:integer</blockquote>
+Same as above, specify constant start position and end position:
+<blockquote>oak-chunk-update --execute="UPDATE City, Country SET City.District = 'unknown' WHERE City.CountryCode = Country.Code AND Country.Continent = 'Africa' AND OAK_CHUNK(City)" --force-chunking-column=id:integer --start-with=1074 --end-with=2990</blockquote>
+Same as above, specify query start position, skip locks:
+<blockquote>oak-chunk-update --execute="UPDATE City, Country SET City.District = 'unknown' WHERE City.CountryCode = Country.Code AND Country.Continent = 'Africa' AND OAK_CHUNK(City)" --force-chunking-column=id:integer --start-with="SELECT MIN(id) FROM world.City WHERE District=''" --skip-lock-tables</blockquote>
+Provide connection parameters. Prompt for password:
+<blockquote>oak-chunk-update --user=root --ask-pass --socket=/tmp/mysql.sock  --database=world --execute="DELETE FROM City WHERE Population &lt; 10000000 AND OAK_CHUNK(City)"</blockquote>
+Use a defaults file for parameters.
+<blockquote>oak-chunk-update --defaults-file=/home/myuser/.my-oak.cnf  --database=world --execute="DELETE FROM City WHERE Population &lt; 10000000 AND OAK_CHUNK(City)"</blockquote>
+
+<h3>DESCRIPTION</h3>
+<p>
+This utility allows for splitting long running or non-indexed UPDATE/DELETE oprations, optionally multi-table ones.
+Long running updating queries are often used. Some examples:
+</p>
+<ul>
+	<li>Purging old table records (e.g. purging old logs).</li>
+	<li>Updating a column on a table scale.</li>
+	<li>Deleting or updating a small number of rows, but with a non-indexed search condition.</li>
+	<li>Inserting into one table aggregated values from other tables.</li>
+</ul>
+<p><i>oak-chunk-update</i> splits such long running tasks into small chunks. It also allows for sleep time between chunks. This allows for less lock time, better replication responsiveness (less lag) and less stress on system resources (CPU, IO).
+To perform, the utility uses a UNIQUE KEY on a given table, which is used for the splitting process.
+Note that the query may involve multiple tables (JOINed), in which case one of the tables must have a UNIQUE KEY.
+The utility requires, then:
+</p>
+<ul>
+	<li>At least on of the tables participating in the UPDATE/DELETE query has a UNIQUE KEY.</li>
+	<li>The query must indicate to the utility the table for which the UNIQUE KEY is used.</li>
+</ul>
+<p>
+The query must include a hint in the form <strong>OAK_CHUNK(table_name)</strong> or <strong>OAK_CHUNK(database_name.table_name)</strong>. See SYNOPSIS for examples.
+The table indicated in the <strong>OAK_CHUNK</strong> clause is the table which must contain a UNIQUE KEY, which is used for splitting the query. The utility rewrites the query by iteratively replacing the <strong>OAK_CHUNK(...)</strong> clause with appropriate values from the UNIQUE KEY.
+In case more than one UNIQUE KEY is available on the table, the utility chooses in the following order:
+</p>
+<ul>
+	<li>If there's a PRIMARY KEY - this is the selected key</li>
+	<li>A key for which the first column is non-textual is prefereable to a key for which the first column is textual</li>
+	<li>A key with a smaller numeric data type takes precedance</li>
+	<li>A key with fewer columns take precedance</li>
+</ul>
+<p>
+The tool auto selects the chunking key by observing <b>INFORMATION_SCHEMA</b>. Reading from <b>INFORMATION_SCHEMA</b> is risky on large, busy servers.
+It is possible to instruct the tool to use a specific column, by adding <b>--force-chunking-column</b>. 
+</p>
+<p>
+Limiting the number of scanned rows is done via <b>--start-with</b> and <b>--end-with</b>. Neither, either or both can be specified, as constant or 
+as a SELECT query returning a single integer value. In the latter case it is required that the chunking key is itself an integer. 
+<b>--terminate-on-not-found</b> is another way of limiting scanned rows, by instructing the tool to quit the first time the query has no effect. 
+This works well for monotonic columns, e.g. TIMESTAMP columns with increasing values. 
+</p>
+
+<h3>OPTIONS</h3>
+--ask-pass
+<p class="indent">Prompt for password.</p>
+
+-c CHUNK_SIZE, --chunk-size=CHUNK_SIZE
+<p class="indent">Number of rows to act on in chunks (default: 1000). 0 means all rows updated in one operation
+The lower the number, the shorter any locks are held, but the more operations required and the more total running time.
+
+-d DATABASE, --database=DATABASE
+<p class="indent">Database name (required unless table is fully qualified)</p>
+
+--defaults-file=DEFAULTS_FILE
+<p class="indent">Read from MySQL configuration file. Overrides --user, --password, --socket, --port.</p>
+<p class="indent">Configuration needs to be in the following format:</p>
+
+<p class="indent"><strong>[client]<br/>
+user=my_user<br/>
+password=my_pass<br/>
+socket=/tmp/mysql.sock<br/>
+port=3306</strong>
+</p>
+
+--end-with=END_WITH   
+<p class="indent">Assuming chunking on numeric field (e.g.
+AUTO_INCREMENT), end chunking with this value. Either
+provide a constant or a query returning a single
+integer value.</p>
+
+-e EXECUTE_QUERY, --execute=EXECUTE_QUERY
+<p class="indent">Query to execute, which contains a chunk placeholder
+in the form of OAK_CHUNK(table_name) (required)</p>
+
+--force-chunking-column=FORCED_CHUNKING_COLUMN
+<p class="indent">
+Columns to chunk by; avoids querying in
+INFORMATION_SCHEMA. Format: either column_name:type,
+where type is integer/text/temporal - for single
+column keys, or column1_name,column2_name,... for one
+or more column keys, with no type.
+</p>
+
+-H HOST, --host=HOST
+<p class="indent">MySQL host (default: localhost)</p>
+
+--no-log-bin
+<p class="indent">Do not log to binary log (actions will not replicate). This may be useful if the slave already finds it hard to replicate behind master. The utility may be spawned manually on slave machines, therefore utilizing more than one CPU core on those machines, making replication process faster due to parallelism.</p>
+
+-p PASSWORD, --password=PASSWORD
+<p class="indent">MySQL password</p>
+
+-P PORT, --port=PORT
+<p class="indent">TCP/IP port (default: 3306)</p>
+
+--print-progress
+<p class="indent">Show number of affected rows during utility runtime</p>
+
+--sleep=SLEEP_MILLIS
+<p class="indent">Number of milliseconds to sleep between chunks. Default: 0</p>
+
+--sleep-ratio=SLEEP_RATIO
+<p class="indent">Ratio of sleep time to execution time. Default: 0</p>
+
+--skip-lock-tables    
+<p class="indent">Do not issue a LOCK TABLES READ. May be required when
+using queries within --start-with or --end-with
+</p>
+
+--skip-retry-chunk    
+<p class="indent">Avoid retrying a chunk operation on error. Default: false
+</p>
+
+-S SOCKET, --socket=SOCKET
+<p class="indent">MySQL socket file. Only applies when host is localhost</p>
+
+--start-with=START_WITH
+<p class="indent">Assuming chunking on numeric field (e.g.
+AUTO_INCREMENT), start chunking from this value and
+onward. Either provide a constant or a query returning
+a single integer value.
+</p>
+
+--terminate-on-not-found
+<p class="indent">Terminate on first occurrence where chunking did not
+affect any rows (default: False)
+</p>
+
+-u USER, --user=USER
+<p class="indent">MySQL user</p>
+
+-v, --verbose
+<p class="indent">Print user friendly messages</p>
+
+<h3>ENVIRONMENT</h3>
+Requires MySQL 5.0 or newer, python 2.3 or newer.
+
+python-mysqldb must be installed in order to use this tool. You can
+<blockquote>apt-get install python-mysqldb</blockquote>
+or
+<blockquote>yum install mysql-python</blockquote>
+<h3>SEE ALSO</h3>
+<p>oak-repeat-query</p>
+
+<h3>LICENSE</h3>
+This tool is released under the BSD license.
+<blockquote><pre>Copyright (c) 2008 - 2010, Shlomi Noach
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+* Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+* Neither the name of the organization nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR 
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT 
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR 
+TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</pre>
+</blockquote>
+<h3>AUTHOR</h3>
+Shlomi Noach
+				<br/>
+			</div>
+			<div id="sidebarwrapper">
+				<div id="menu">
+					<h3>openark kit tools</h3>
+					<ul>
+						<li><a title="Introduction" href="introduction.html">Introduction</a></li>
+						<li><a title="Download" href="download.html">Download</a></li>
+						<li><a title="Install" href="install.html">Install</a></li>
+						<li><a title="oak-apply-ri" href="oak-apply-ri.html">oak-apply-ri</a></li>
+						<li><a title="oak-block-account" href="oak-block-account.html">oak-block-account</a></li>
+						<li><a title="oak-chunk-update" href="oak-chunk-update.html">oak-chunk-update</a></li>
+						<li><a title="oak-get-slave-lag" href="oak-get-slave-lag.html">oak-get-slave-lag</a></li>
+						<li><a title="oak-hook-general-log" href="oak-hook-general-log.html">oak-hook-general-log</a></li>
+						<li><a title="oak-kill-slow-queries" href="oak-kill-slow-queries.html">oak-kill-slow-queries</a></li>
+						<li><a title="oak-modify-charset" href="oak-modify-charset.html">oak-modify-charset</a></li>
+						<li><a title="oak-online-alter-table" href="oak-online-alter-table.html">oak-online-alter-table</a></li>
+						<li><a title="oak-prepare-shutdown" href="oak-prepare-shutdown.html">oak-prepare-shutdown</a></li>
+						<li><a title="oak-purge-master-logs" href="oak-purge-master-logs.html">oak-purge-master-logs</a></li>
+						<li><a title="oak-repeat-query" href="oak-repeat-query.html">oak-repeat-query</a></li>
+						<li><a title="oak-security-audit" href="oak-security-audit.html">oak-security-audit</a></li>
+						<li><a title="oak-show-limits" href="oak-show-limits.html">oak-show-limits</a></li>
+						<li><a title="oak-show-replication-status" href="oak-show-replication-status.html">oak-show-replication-status</a></li>
+					</ul>
+				</div>
+			</div>	
+			<div class="clear">&nbsp;</div>
+			
+			<div id="footnote" align="center">
+				<a href="">openark kit</a> documentation
+			</div>
+		</div>
+	</div>
+</body>
+</html>

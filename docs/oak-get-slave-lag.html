@@ -1,0 +1,142 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	<title>oak-get-slave-lag: openark kit documentation</title>
+	<meta name="description" content="oak-get-slave-lag: openark kit" />
+	<meta name="keywords" content="oak-get-slave-lag: openark kit" />
+	<link rel="stylesheet" type="text/css" href="style.css" />
+</head>
+
+<body>
+	<div id="main">
+		<div id="header">
+			<h1>openark kit documentation</h1>
+			<div class="subtitle">Common utilities for MySQL</div>
+		</div>
+		<div id="contentwrapper">
+			<div id="content">
+				<h2><a href="oak-get-slave-lag.html">oak-get-slave-lag</a></h2>	
+<h3>NAME</h3>
+oak-get-slave-lag: print slave replication lag and terminate with respective exit code.
+<h3>SYNOPSIS</h3>
+Print slave lag, return <b>0</b> exit code:
+<blockquote>oak-get-slave-lag --user=root --socket=/tmp/mysql.sock</blockquote>
+Print slave lag, return <b>1</b> exit code if slave lag is greater than <b>60</b> seconds or slave is not replicating at all. 
+Return <b>0</b> exit code when slave replicates and lag is less than or equal to <b>60</b> seconds.
+<blockquote>oak-get-slave-lag --user=root --socket=/tmp/mysql.sock -e 60</blockquote>
+Same as above, use defaults file:
+<blockquote>oak-get-slave-lag --defaults-file=/home/myuser/.my-oak.cnf -e 60</blockquote>
+
+<h3>DESCRIPTION</h3>
+<p>This tools prints out the slave lag and produces either <b>0</b> exit code on success or <b>1</b> on failure</p>
+
+<p>When the <b>--error-if-more-than-seconds</b> option (<b>-e</b> short form) is specified, <i>oak-get-slave-lag</i> expects
+replication lag to be smaller than or equal to given value. If replication lags more than given number of seconds, or does not work
+at all, the tool exits with <b>1</b> exit code. Otherwise the tool is satisfied and returns with <b>0</b> exit code.</p>
+
+<p>Replication lag is deduced from the <b>Seconds_Behind_Master</b> value on <b>SHOW SLAVE STATUS</b>. Mind that this value is not always correct. 
+Unless replication heartbeat is present (MySQL >= <b>5.5</b>), <b>SHOW SLAVE STATUS</b> may report a <b>0</b> lag when in fact it lags hours behind, 
+for a limited period of time.</p>
+
+<h3>OPTIONS</h3>
+--ask-pass
+<p class="indent">Prompt for password.</p>
+
+--debug
+<p class="indent">Print stack trace on error.</p>
+
+-e ERROR_IF_MORE_THAN_SECONDS, --error-if-more-than-seconds=ERROR_IF_MORE_THAN_SECONDS
+<p class="indent">Return with error exit code if slave lag is more than
+given number of seconds (default: disabled)</p>
+     
+--defaults-file=DEFAULTS_FILE
+<p class="indent">Read from MySQL configuration file. Overrides --user, --password, --socket, --port.</p>
+<p class="indent">Configuration needs to be in the following format:</p>
+
+<p class="indent"><strong>[client]<br/>
+user=my_user<br/>
+password=my_pass<br/>
+socket=/tmp/mysql.sock<br/>
+port=3306</strong>
+</p>
+
+-H HOST, --host=HOST
+<p class="indent">MySQL host (default: localhost)</p>
+
+-p PASSWORD, --password=PASSWORD
+<p class="indent">MySQL password</p>
+
+-P PORT, --port=PORT
+<p class="indent">TCP/IP port (default: 3306)</p>
+
+-S SOCKET, --socket=SOCKET
+<p class="indent">MySQL socket file. Only applies when host is localhost</p>
+
+-u USER, --user=USER
+<p class="indent">MySQL user</p>
+
+-v, --verbose
+<p class="indent">Print user friendly messages</p>
+
+<h3>ENVIRONMENT</h3>
+Requires MySQL 5.0 or newer, python 2.3 or newer.
+
+python-mysqldb must be installed in order to use this tool. You can
+<blockquote>apt-get install python-mysqldb</blockquote>
+or
+<blockquote>yum install mysql-python</blockquote>
+<h3>SEE ALSO</h3>
+oak-show-replication-status
+
+<h3>LICENSE</h3>
+This tool is released under the BSD license.
+<blockquote><pre>Copyright (c) 2008 - 2010, Shlomi Noach
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+* Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+* Neither the name of the organization nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR 
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT 
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR 
+TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</pre>
+</blockquote>
+<h3>AUTHOR</h3>
+Shlomi Noach
+				<br/>
+			</div>
+			<div id="sidebarwrapper">
+				<div id="menu">
+					<h3>openark kit tools</h3>
+					<ul>
+						<li><a title="Introduction" href="introduction.html">Introduction</a></li>
+						<li><a title="Download" href="download.html">Download</a></li>
+						<li><a title="Install" href="install.html">Install</a></li>
+						<li><a title="oak-apply-ri" href="oak-apply-ri.html">oak-apply-ri</a></li>
+						<li><a title="oak-block-account" href="oak-block-account.html">oak-block-account</a></li>
+						<li><a title="oak-chunk-update" href="oak-chunk-update.html">oak-chunk-update</a></li>
+						<li><a title="oak-get-slave-lag" href="oak-get-slave-lag.html">oak-get-slave-lag</a></li>
+						<li><a title="oak-hook-general-log" href="oak-hook-general-log.html">oak-hook-general-log</a></li>
+						<li><a title="oak-kill-slow-queries" href="oak-kill-slow-queries.html">oak-kill-slow-queries</a></li>
+						<li><a title="oak-modify-charset" href="oak-modify-charset.html">oak-modify-charset</a></li>
+						<li><a title="oak-online-alter-table" href="oak-online-alter-table.html">oak-online-alter-table</a></li>
+						<li><a title="oak-prepare-shutdown" href="oak-prepare-shutdown.html">oak-prepare-shutdown</a></li>
+						<li><a title="oak-purge-master-logs" href="oak-purge-master-logs.html">oak-purge-master-logs</a></li>
+						<li><a title="oak-repeat-query" href="oak-repeat-query.html">oak-repeat-query</a></li>
+						<li><a title="oak-security-audit" href="oak-security-audit.html">oak-security-audit</a></li>
+						<li><a title="oak-show-limits" href="oak-show-limits.html">oak-show-limits</a></li>
+						<li><a title="oak-show-replication-status" href="oak-show-replication-status.html">oak-show-replication-status</a></li>
+					</ul>
+				</div>
+			</div>	
+			<div class="clear">&nbsp;</div>
+			
+			<div id="footnote" align="center">
+				<a href="">openark kit</a> documentation
+			</div>
+		</div>
+	</div>
+</body>
+</html>
